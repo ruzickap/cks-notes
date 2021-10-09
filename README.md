@@ -134,3 +134,134 @@ $ sudo tree /var/lib/kubelet/pki
 ├── kubelet.crt
 └── kubelet.key
 ```
+
+## Docker namespace
+
+```bash
+docker run --name cont1 -d ubuntu sh -c "sleep 1d"
+docker run --name cont2 --pid=container:cont1 -d ubuntu sh -c "sleep 111d"
+```
+
+```text
+$ docker exec cont2 ps -elf
+F S UID        PID  PPID  C PRI  NI ADDR SZ WCHAN  STIME TTY          TIME CMD
+4 S root         1     0  0  80   0 -   653 do_wai 09:59 ?        00:00:00 sh -c sleep 1d
+0 S root         7     1  0  80   0 -   628 hrtime 09:59 ?        00:00:00 sleep 1d
+4 S root         8     0  0  80   0 -   653 do_wai 09:59 ?        00:00:00 sh -c sleep 111d
+0 S root        15     8  0  80   0 -   628 hrtime 09:59 ?        00:00:00 sleep 111d
+4 R root        16     0  0  80   0 -  1475 -      10:00 ?        00:00:00 ps -elf
+
+$ docker exec cont1 ps -elf
+F S UID        PID  PPID  C PRI  NI ADDR SZ WCHAN  STIME TTY          TIME CMD
+4 S root         1     0  0  80   0 -   653 do_wai 09:59 ?        00:00:00 sh -c sleep 1d
+0 S root         7     1  0  80   0 -   628 hrtime 09:59 ?        00:00:00 sleep 1d
+4 S root         8     0  0  80   0 -   653 do_wai 09:59 ?        00:00:00 sh -c sleep 111d
+0 S root        15     8  0  80   0 -   628 hrtime 09:59 ?        00:00:00 sleep 111d
+4 R root        22     0  0  80   0 -  1475 -      10:00 ?        00:00:00 ps -elf
+```
+
+## Network Policies
+
+[Network Policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/)
+
+Run two test pods + services:
+
+```bash
+kubectl run frontend --image=nginx --port=80 --expose=true
+kubectl run backend --image=nginx --port=80 --expose=true
+kubectl create namespace database
+kubectl label namespace database ns=database
+kubectl run -n database database --image=nginx --port=80 --expose=true
+```
+
+Check connectivity:
+
+```bash
+kubectl exec frontend -- curl -s backend
+kubectl exec backend -- curl -s frontend
+kubectl exec backend -- curl -s database.database.svc.cluster.local
+```
+
+Deny all policy:
+
+```bash
+kubectl apply -f - << EOF
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: default
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+EOF
+```
+
+Allow connection between `frontend` -> `backend` (and DNS):
+
+```bash
+kubectl apply -f - << EOF
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      run: frontend
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          run: backend
+  # DNS - allow by default
+  - to:
+    ports:
+      - port: 53
+        protocol: UDP
+      - port: 53
+        protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      run: backend
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          run: frontend
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          ns: database
+  # DNS - allow by default
+  - to:
+    ports:
+      - port: 53
+        protocol: UDP
+      - port: 53
+        protocol: TCP
+EOF
+```
+
+The following command will work, because there is no NetworkPolicies in the
+database namespace.
+
+```bash
+kubectl exec backend -- curl -s database.database.svc.cluster.local
+```
