@@ -418,3 +418,74 @@ $ curl -sk https://192.168.56.2:31606/app2 | jq
   "num_cpu": "2"
 }
 ```
+
+### Ingress - certificate
+
+There is self signed certificate used by Ingress:
+
+```text
+$ curl -sk https://192.168.56.2:31606/app2
+...
+* Server certificate:
+*  subject: O=Acme Co; CN=Kubernetes Ingress Controller Fake Certificate
+...
+```
+
+Generate new cert:
+
+```bash
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+-keyout key.pem -out cert.pem \
+-subj /C=CZ/ST=Czech/L=Prague/O=IT/OU=DevOps/CN=my-secure-ingress.k8s.cluster.com
+```
+
+Create k8s secret:
+
+```bash
+kubectl create secret tls tls-secret --cert=cert.pem --key=key.pem
+```
+
+Update ingress:
+
+```bash
+kubectl apply -f - << EOF
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: my-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: "nginx"
+  tls:
+  - hosts:
+      - my-secure-ingress.k8s.cluster.com
+    secretName: tls-secret
+  rules:
+  - host: my-secure-ingress.k8s.cluster.com
+    http:
+      paths:
+      - path: /app1
+        pathType: Prefix
+        backend:
+          service:
+            name: app1
+            port:
+              number: 9898
+      - path: /app2
+        pathType: Prefix
+        backend:
+          service:
+            name: app2
+            port:
+              number: 9898
+EOF
+```
+
+```text
+$ curl -kv https://my-secure-ingress.k8s.cluster.com:31606/app2 --resolve my-secure-ingress.k8s.cluster.com:31606:192.168.56.2
+...
+* Server certificate:
+*  subject: C=CZ; ST=Czech; L=Prague; O=IT; OU=DevOps; CN=my-secure-ingress.k8s.cluster.com
+...
+```
