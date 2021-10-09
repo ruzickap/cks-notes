@@ -265,3 +265,54 @@ database namespace.
 ```bash
 kubectl exec backend -- curl -s database.database.svc.cluster.local
 ```
+
+## Kubernetes Dashboard
+
+[Dashboard arguments](https://github.com/kubernetes/dashboard/blob/master/docs/common/dashboard-arguments.md)
+
+> Do not do this on your production :-)
+
+Install:
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.3.1/aio/deploy/recommended.yaml
+```
+
+Create `ClusterRoleBinding`:
+
+```bash
+kubectl create clusterrolebinding kubernetes-dashboard-view-all --serviceaccount kubernetes-dashboard:kubernetes-dashboard --clusterrole view
+```
+
+Configure `NodePort` "access":
+
+```bash
+kubectl patch svc -n kubernetes-dashboard kubernetes-dashboard --type='json' -p '[{"op":"replace","path":"/spec/type","value":"NodePort"}]'
+```
+
+Edit configuration by running
+`kubectl edit deploy -n kubernetes-dashboard kubernetes-dashboard`:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubernetes-dashboard
+  namespace: kubernetes-dashboard
+spec:
+  template:
+    spec:
+      containers:
+      - args:
+        # - --auto-generate-certificates     # Allow use port 9090 for insecure HTTP connections
+        - --namespace=kubernetes-dashboard
+        - --authentication-mode=basic        # Enable basic authentication
+        - --enable-skip-login=true           # Enable "skip button" on the login page will be shown
+        - --enable-insecure-login            # Enable Dashboard login when using HTTP
+```
+
+You should be able to reach Kubernetes Dashboard by going to [http://192.168.56.2:32645](http://192.168.56.2:32645):
+
+```bash
+curl -k http://192.168.56.2:32645
+```
