@@ -1,5 +1,7 @@
 # CKS Notes
 
+## Test k8s cluster using Vagrant
+
 Prepare the test environment - Kubernetes cluster with 1 master node and one
 worker node using Vagrant + VirtualBox:
 
@@ -30,7 +32,7 @@ sudo sysctl --system
 
 sudo apt-get update
 
-sudo apt-get install -y apt-transport-https ca-certificates curl lsb-release
+sudo apt-get install -y apt-transport-https ca-certificates curl lsb-release mc tree
 
 sudo curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
 
@@ -91,4 +93,44 @@ Run on **worker** `kubenode01` node only:
 ```bash
 # vagrant ssh kubenode01
 sudo kubeadm join 192.168.56.2:6443 --token i0sn6a.jnvsbw73yi03nre7 --discovery-token-ca-cert-hash sha256:ffa3c5c3cd8ee55bd9497e8d6d9556d3bcef7b0879f871a088819f232c4673e0
+```
+
+## Kubernetes certificates
+
+* `/etc/kubernetes/pki`
+* `/var/lib/kubelet/pki`
+
+```text
+$ sudo tree /etc/kubernetes/pki
+/etc/kubernetes/pki
+├── apiserver-etcd-client.crt
+├── apiserver-etcd-client.key
+├── apiserver-kubelet-client.crt
+├── apiserver-kubelet-client.key
+├── apiserver.crt
+├── apiserver.key
+├── ca.crt
+├── ca.key
+├── etcd
+│   ├── ca.crt
+│   ├── ca.key
+│   ├── healthcheck-client.crt
+│   ├── healthcheck-client.key
+│   ├── peer.crt
+│   ├── peer.key
+│   ├── server.crt
+│   └── server.key
+├── front-proxy-ca.crt
+├── front-proxy-ca.key
+├── front-proxy-client.crt
+├── front-proxy-client.key
+├── sa.key
+└── sa.pub
+
+$ sudo tree /var/lib/kubelet/pki
+/var/lib/kubelet/pki
+├── kubelet-client-2021-10-09-07-44-38.pem
+├── kubelet-client-current.pem -> /var/lib/kubelet/pki/kubelet-client-2021-10-09-07-44-38.pem
+├── kubelet.crt
+└── kubelet.key
 ```
