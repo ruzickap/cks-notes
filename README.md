@@ -299,7 +299,9 @@ kind: Deployment
 metadata:
   name: kubernetes-dashboard
   namespace: kubernetes-dashboard
+...
 spec:
+...
   template:
     spec:
       containers:
@@ -309,10 +311,110 @@ spec:
         - --authentication-mode=basic        # Enable basic authentication
         - --enable-skip-login=true           # Enable "skip button" on the login page will be shown
         - --enable-insecure-login            # Enable Dashboard login when using HTTP
+...
 ```
 
 You should be able to reach Kubernetes Dashboard by going to [http://192.168.56.2:32645](http://192.168.56.2:32645):
 
 ```bash
 curl -k http://192.168.56.2:32645
+```
+
+## Ingress
+
+Install `ingress-nginx` and delete "NetworkPolicies" + "Services" + "Pods":
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.0.3/deploy/static/provider/baremetal/deploy.yaml
+kubectl delete networkpolicies,svc,pods --all
+```
+
+```text
+$ kubectl get pods,svc -n ingress-nginx
+NAME                                            READY   STATUS              RESTARTS   AGE
+pod/ingress-nginx-admission-create--1-hb24s     0/1     Completed           0          13s
+pod/ingress-nginx-admission-patch--1-znw8z      0/1     Completed           0          13s
+pod/ingress-nginx-controller-6c68f5b657-wzbx8   0/1     ContainerCreating   0          13s
+
+NAME                                         TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)                      AGE
+service/ingress-nginx-controller             NodePort    10.96.253.251   <none>        80:32550/TCP,443:31606/TCP   13s
+service/ingress-nginx-controller-admission   ClusterIP   10.100.6.131    <none>        443/TCP                      13s
+```
+
+Verify the `ingress-nginx` is up by running (you will get "404"):
+
+```bash
+curl -kv http://192.168.56.2:32550 https://192.168.56.2:31606
+```
+
+Start two applications:
+
+```bash
+kubectl run app1 --image=ghcr.io/stefanprodan/podinfo:6.0.0 --port=9898 --expose=true --env="PODINFO_UI_MESSAGE=app1"
+kubectl run app2 --image=ghcr.io/stefanprodan/podinfo:6.0.0 --port=9898 --expose=true --env="PODINFO_UI_MESSAGE=app2"
+```
+
+```bash
+kubectl apply -f - << EOF
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: my-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: "nginx"
+  rules:
+  - http:
+      paths:
+      - path: /app1
+        pathType: Prefix
+        backend:
+          service:
+            name: app1
+            port:
+              number: 9898
+      - path: /app2
+        pathType: Prefix
+        backend:
+          service:
+            name: app2
+            port:
+              number: 9898
+EOF
+```
+
+You should be able to reach the ingress and the services behind which should
+give different response:
+
+```text
+$ curl -sk https://192.168.56.2:31606/app1 | jq
+{
+  "hostname": "app1",
+  "version": "6.0.0",
+  "revision": "",
+  "color": "#34577c",
+  "logo": "https://raw.githubusercontent.com/stefanprodan/podinfo/gh-pages/cuddle_clap.gif",
+  "message": "app1",
+  "goos": "linux",
+  "goarch": "amd64",
+  "runtime": "go1.16.5",
+  "num_goroutine": "6",
+  "num_cpu": "2"
+}
+
+$ curl -sk https://192.168.56.2:31606/app2 | jq
+{
+  "hostname": "app2",
+  "version": "6.0.0",
+  "revision": "",
+  "color": "#7c4134",
+  "logo": "https://raw.githubusercontent.com/stefanprodan/podinfo/gh-pages/cuddle_clap.gif",
+  "message": "app2",
+  "goos": "linux",
+  "goarch": "amd64",
+  "runtime": "go1.16.5",
+  "num_goroutine": "6",
+  "num_cpu": "2"
+}
 ```
