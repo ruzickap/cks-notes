@@ -634,3 +634,70 @@ $ kubectl get secrets -n blue
 NAME                  TYPE                                  DATA   AGE
 default-token-g7sgk   kubernetes.io/service-account-token   3      3h51m
 ```
+
+## Service Accounts
+
+```text
+$ kubectl get serviceaccount,secrets
+NAME                     SECRETS   AGE
+serviceaccount/default   1         28h
+
+NAME                         TYPE                                  DATA   AGE
+secret/default-token-rxnbt   kubernetes.io/service-account-token   3      28h
+
+$ kubectl describe serviceaccounts default
+Name:                default
+Namespace:           default
+Labels:              <none>
+Annotations:         <none>
+Image pull secrets:  <none>
+Mountable secrets:   default-token-rxnbt
+Tokens:              default-token-rxnbt
+Events:              <none>
+```
+
+Create `ServiceAccount` and run the pod using it:
+
+```bash
+kubectl create serviceaccount nginx
+
+kubectl apply -f - << EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: nginx
+  name: nginx
+spec:
+  serviceAccountName: nginx
+  containers:
+  - image: nginx
+    name: nginx
+EOF
+```
+
+Get into the pod:
+
+```text
+$ kubectl exec -it nginx -- bash
+
+$ mount | grep serviceaccount
+tmpfs on /run/secrets/kubernetes.io/serviceaccount type tmpfs (ro,relatime,size=1938344k)
+
+$ find /run/secrets/kubernetes.io/serviceaccount
+/run/secrets/kubernetes.io/serviceaccount
+/run/secrets/kubernetes.io/serviceaccount/..data
+/run/secrets/kubernetes.io/serviceaccount/namespace
+/run/secrets/kubernetes.io/serviceaccount/ca.crt
+/run/secrets/kubernetes.io/serviceaccount/token
+/run/secrets/kubernetes.io/serviceaccount/..2021_10_10_12_32_28.152125108
+/run/secrets/kubernetes.io/serviceaccount/..2021_10_10_12_32_28.152125108/token
+/run/secrets/kubernetes.io/serviceaccount/..2021_10_10_12_32_28.152125108/namespace
+/run/secrets/kubernetes.io/serviceaccount/..2021_10_10_12_32_28.152125108/ca.crt
+```
+
+### Disable automount of the ServiceAccount token in the pod
+
+```yaml
+automountServiceAccountToken: false
+```
