@@ -1,5 +1,7 @@
 # CKS Notes
 
+Handy notes can be also find here: [https://github.com/dragon7-fc/misc/tree/1385c4a2e4719b9aa914c3b274c2877f7305d11e](https://github.com/dragon7-fc/misc/tree/1385c4a2e4719b9aa914c3b274c2877f7305d11e)
+
 ## Test k8s cluster using Vagrant
 
 Prepare the test environment - Kubernetes cluster with 1 master node and one
@@ -57,6 +59,8 @@ cat <<EOF | sudo tee /etc/docker/daemon.json
   "storage-driver": "overlay2"
 }
 EOF
+
+sudo usermod -aG docker "${USER}"
 
 sudo systemctl enable docker
 sudo systemctl daemon-reload
@@ -488,4 +492,77 @@ $ curl -kv https://my-secure-ingress.k8s.cluster.com:31606/app2 --resolve my-sec
 * Server certificate:
 *  subject: C=CZ; ST=Czech; L=Prague; O=IT; OU=DevOps; CN=my-secure-ingress.k8s.cluster.com
 ...
+```
+
+## CIS benchmarks
+
+[CIS Kubernetes Benchmark v1.6.0 - 07-23-2020](https://github.com/cismirror/old-benchmarks-archive/blob/master/CIS_Kubernetes_Benchmark_v1.6.0.pdf)
+
+### kube-bench
+
+[kube-bench](https://github.com/aquasecurity/kube-bench)
+
+```bash
+docker run --pid=host -v /etc:/etc:ro -v /var:/var:ro -v "$(which kubectl):/usr/local/mount-from-host/bin/kubectl" -v ~/.kube:/.kube -e KUBECONFIG=/.kube/config -t aquasec/kube-bench:latest master
+docker run --pid=host -v /etc:/etc:ro -v /var:/var:ro -v "$(which kubectl):/usr/local/mount-from-host/bin/kubectl" -v ~/.kube:/.kube -e KUBECONFIG=/.kube/config -t aquasec/kube-bench:latest node
+```
+
+## Hashes
+
+* Get kubernetes binaries from: [Kubernetes v1.22.2](https://github.com/kubernetes/kubernetes/releases/tag/v1.22.2)
+
+* Go to [CHANGELOG](https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.22.md)
+
+* Check [Downloads for v1.22.2](https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.22.md#downloads-for-v1222)
+
+Generate SHA512 hash from the file:
+
+```bash
+curl -L https://dl.k8s.io/v1.22.2/kubernetes-server-linux-amd64.tar.gz | sha512sum
+```
+
+## RBAC
+
+[Using RBAC Authorization](https://kubernetes.io/docs/reference/access-authn-authz/rbac/)
+
+Create namespace `red` and `blue`:
+
+```bash
+kubectl create namespace red
+kubectl create namespace blue
+```
+
+Create "Roles" and "RoleBindings":
+
+```bash
+kubectl create role secret-manager-role --namespace=red --verb=get --resource=secrets
+kubectl create rolebinding secret-manager-rolebinding --namespace=red --role secret-manager-role --user=jane
+
+kubectl create role secret-manager-role --namespace=blue --verb=get,list --resource=secrets
+kubectl create rolebinding secret-manager-rolebinding --namespace=blue --role secret-manager-role --user=jane
+```
+
+Test "Roles" and "RoleBindings":
+
+```bash
+$ kubectl auth can-i get secrets --namespace=red --as jane
+yes
+$ kubectl auth can-i list secrets --namespace=red --as jane
+no
+$ kubectl auth can-i list secrets --namespace=blue --as jane
+yes
+```
+
+Create "ClusterRoles" and "ClusterRoleBindings":
+
+```bash
+kubectl create clusterrole deploy-deleter --verb=delete --resource=deployments
+kubectl create clusterrolebinding deploy-deleter --user=jane --clusterrole=deploy-deleter
+```
+
+Test "ClusterRoles" and "ClusterRoleBindings":
+
+```bash
+kubectl auth can-i delete deployments --as jane --all-namespaces
+yes
 ```
