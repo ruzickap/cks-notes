@@ -34,7 +34,7 @@ sudo sysctl --system
 
 sudo apt-get update
 
-sudo apt-get install -y apt-transport-https ca-certificates curl lsb-release mc tree
+sudo apt-get install -y apt-transport-https ca-certificates curl jq lsb-release mc tree
 
 sudo curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
 
@@ -565,4 +565,72 @@ Test "ClusterRoles" and "ClusterRoleBindings":
 ```bash
 kubectl auth can-i delete deployments --as jane --all-namespaces
 yes
+```
+
+## Users and Certificates
+
+[Certificate Signing Requests](https://kubernetes.io/docs/reference/access-authn-authz/certificate-signing-requests/)
+
+Create Jane's certificate:
+
+```bash
+touch ~/.rnd
+openssl genrsa -out jane.key 2048
+openssl req -new -key jane.key -out jane.csr \
+-subj /C=CZ/ST=Czech/L=Prague/O=IT/OU=DevOps/CN=jane
+```
+
+Create `CertificateSigningRequest`:
+
+```bash
+kubectl apply -f - << EOF
+apiVersion: certificates.k8s.io/v1
+kind: CertificateSigningRequest
+metadata:
+  name: jane
+spec:
+  groups:
+  - system:authenticated
+  request: $(base64 -w0 jane.csr)
+  signerName: kubernetes.io/kube-apiserver-client
+  usages:
+  - client auth
+EOF
+```
+
+Check certs:
+
+```text
+$ kubectl get certificatesigningrequest
+NAME   AGE   SIGNERNAME                            REQUESTOR          REQUESTEDDURATION   CONDITION
+jane   86s   kubernetes.io/kube-apiserver-client   kubernetes-admin   <none>              Pending
+
+$ kubectl certificate approve jane
+NAME   AGE   SIGNERNAME                            REQUESTOR          REQUESTEDDURATION   CONDITION
+jane   95s   kubernetes.io/kube-apiserver-client   kubernetes-admin   <none>              Approved,Issued
+```
+
+Save signed Jane's certificate to file and create context:
+
+```bash
+kubectl get certificatesigningrequest jane -o=jsonpath='{.status.certificate}' | base64 -d > jane.crt
+kubectl config set-credentials jane --client-key=jane.key --client-certificate=jane.crt --embed-certs=true
+kubectl config set-context jane --user=jane --cluster=kubernetes
+```
+
+```text
+$ kubectl config get-contexts
+CURRENT   NAME                          CLUSTER      AUTHINFO           NAMESPACE
+          jane                          kubernetes   jane
+*         kubernetes-admin@kubernetes   kubernetes   kubernetes-admin
+
+$ kubectl config use-context jane
+Switched to context "jane".
+
+$ kubectl get pods
+Error from server (Forbidden): pods is forbidden: User "jane" cannot list resource "pods" in API group "" in the namespace "default"
+
+$ kubectl get secrets -n blue
+NAME                  TYPE                                  DATA   AGE
+default-token-g7sgk   kubernetes.io/service-account-token   3      3h51m
 ```
