@@ -22,6 +22,8 @@ Run on both k8s nodes (`kubemaster`, `kubenode01`):
 # vagrant ssh kubemaster
 # vagrant ssh kubenode01
 
+KUBE_VERSION=1.19.0
+
 cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf
 br_netfilter
 EOF
@@ -66,12 +68,13 @@ sudo systemctl enable docker
 sudo systemctl daemon-reload
 sudo systemctl restart docker
 
-sudo apt-get install -y kubelet kubeadm kubectl
+sudo apt-get install -y kubelet=${KUBE_VERSION}-00 kubeadm=${KUBE_VERSION}-00 kubectl=${KUBE_VERSION}-00
 sudo apt-mark hold kubelet kubeadm kubectl
 
 cat >> ~/.bashrc << EOF
 source <(kubectl completion bash)
 alias k=kubectl
+complete -F __start_kubectl k
 EOF
 ```
 
@@ -80,7 +83,7 @@ Run on **master** `kubemaster` node only:
 ```bash
 # vagrant ssh kubemaster
 
-sudo kubeadm init --pod-network-cidr=10.224.0.0/16 --apiserver-advertise-address=192.168.56.2
+sudo kubeadm init --kubernetes-version=${KUBE_VERSION} --pod-network-cidr=10.224.0.0/16 --apiserver-advertise-address=192.168.56.2
 
 mkdir -p "${HOME}/.kube"
 sudo cp -i /etc/kubernetes/admin.conf "${HOME}/.kube/config"
@@ -834,4 +837,152 @@ Check if you can see the namespaces:
 
 ```bash
 kubectl --kubeconfig=local.conf get ns
+```
+
+## Kubernetes cluster upgrade
+
+[Upgrading kubeadm clusters](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/)
+
+### Upgrade master node
+
+You are running outdated k8s version 1.19:
+
+```text
+# vagrant ssh kubemaster
+
+$ kubectl get nodes
+NAME         STATUS   ROLES    AGE   VERSION
+kubemaster   Ready    master   22m   v1.19.0
+kubenode01   Ready    <none>   22m   v1.19.0
+```
+
+Drain the master node:
+
+```bash
+kubectl drain kubemaster --ignore-daemonsets
+```
+
+The master node is drained:
+
+```bash
+$ kubectl get nodes
+NAME         STATUS                     ROLES    AGE   VERSION
+kubemaster   Ready,SchedulingDisabled   master   25m   v1.19.0
+kubenode01   Ready                      <none>   24m   v1.19.0
+```
+
+Check avaiable k8s versions (next minor version is 1.20):
+
+```text
+$ apt-cache show kubeadm | grep '1.20'
+Version: 1.20.11-00
+Filename: pool/kubeadm_1.20.11-00_amd64_1343a8b5f81f535549d498a9cf38a2307eee0fc99ea64046b043efae50e31bfe.deb
+Version: 1.20.10-00
+Filename: pool/kubeadm_1.20.10-00_amd64_bef04cc2cb819b1298bd1c22bae9ba90c52cf581584f5f24871df8447ae93186.deb
+...
+```
+
+Upgrade k8s cluster components:
+
+```bash
+KUBE_VERSION=1.20.10
+sudo apt-get install -y --allow-change-held-packages kubelet=${KUBE_VERSION}-00 kubeadm=${KUBE_VERSION}-00 kubectl=${KUBE_VERSION}-00
+```
+
+Check the "upgrade plan":
+
+```text
+$ kubeadm upgrade plan
+...
+Components that must be upgraded manually after you have upgraded the control plane with 'kubeadm upgrade apply':
+COMPONENT   CURRENT        AVAILABLE
+kubelet     1 x v1.19.0    v1.20.10
+            1 x v1.20.10   v1.20.10
+
+Upgrade to the latest stable version:
+
+COMPONENT                 CURRENT   AVAILABLE
+kube-apiserver            v1.19.0   v1.20.10
+kube-controller-manager   v1.19.0   v1.20.10
+kube-scheduler            v1.19.0   v1.20.10
+kube-proxy                v1.19.0   v1.20.10
+CoreDNS                   1.7.0     1.7.0
+etcd                      3.4.9-1   3.4.13-0
+
+You can now apply the upgrade by executing the following command:
+
+  kubeadm upgrade apply v1.20.10
+...
+```
+
+Upgrade the k8s cluster to `1.20.10`:
+
+```bash
+sudo kubeadm upgrade apply v1.20.10
+```
+
+Check the nodes:
+
+```text
+$ kubectl get nodes
+NAME         STATUS                     ROLES                  AGE   VERSION
+kubemaster   Ready,SchedulingDisabled   control-plane,master   42m   v1.20.10
+kubenode01   Ready                      <none>                 42m   v1.19.0
+```
+
+Uncordon the master
+
+```bash
+kubectl uncordon kubemaster
+```
+
+### Upgrade worker node
+
+```text
+# vagrant ssh kubemaster
+
+$ kubectl get nodes
+NAME         STATUS   ROLES                  AGE   VERSION
+kubemaster   Ready    control-plane,master   43m   v1.20.10
+kubenode01   Ready    <none>                 43m   v1.19.0
+```
+
+Drain the worker node:
+
+```bash
+kubectl drain kubenode01 --ignore-daemonsets
+```
+
+The worker node is drained:
+
+```bash
+$ kubectl get nodes
+NAME         STATUS                     ROLES                  AGE   VERSION
+kubemaster   Ready                      control-plane,master   48m   v1.20.10
+kubenode01   Ready,SchedulingDisabled   <none>                 47m   v1.19.0
+```
+
+Upgrade k8s cluster components:
+
+```bash
+# vagrant ssh kubenode01
+
+KUBE_VERSION=1.20.10
+sudo apt-get install -y --allow-change-held-packages kubeadm=${KUBE_VERSION}-00
+
+sudo kubeadm upgrade node
+
+sudo apt-get install -y --allow-change-held-packages kubelet=${KUBE_VERSION}-00 kubectl=${KUBE_VERSION}-00
+```
+
+Check the nodes:
+
+```text
+$ kubectl uncordon kubenode01
+node/kubenode01 uncordoned
+
+$ kubectl get nodes
+NAME         STATUS                     ROLES                  AGE   VERSION
+kubemaster   Ready                      control-plane,master   53m   v1.20.10
+kubenode01   Ready,SchedulingDisabled   <none>                 52m   v1.20.10
 ```
