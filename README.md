@@ -16,57 +16,49 @@ sed -i 's/NUM_WORKER_NODE = 2/NUM_WORKER_NODE = 1/' Vagrantfile
 vagrant up
 ```
 
+The installation is taken from: [install_master.sh](https://github.com/killer-sh/cks-course-environment/blob/master/cluster-setup/latest/install_master.sh)
+
 Run on both k8s nodes (`kubemaster`, `kubenode01`):
 
 ```bash
 # vagrant ssh kubemaster
 # vagrant ssh kubenode01
 
-KUBE_VERSION=1.19.0
-
-cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf
-br_netfilter
-EOF
-
-cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
-net.bridge.bridge-nf-call-ip6tables = 1
-net.bridge.bridge-nf-call-iptables = 1
-EOF
-sudo sysctl --system
-
-sudo apt-get update
-
-sudo apt-get install -y apt-transport-https ca-certificates curl jq lsb-release mc tree
+KUBE_VERSION=1.21.5
 
 sudo curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
-
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-
 echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
 
-echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
-  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
 sudo apt-get update
-sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+sudo apt-get install -y apt-transport-https ca-certificates containerd curl docker.io jq lsb-release mc tree
 
-cat <<EOF | sudo tee /etc/docker/daemon.json
-{
-  "exec-opts": ["native.cgroupdriver=systemd"],
-  "log-driver": "json-file",
-  "log-opts": {
-    "max-size": "100m"
-  },
-  "storage-driver": "overlay2"
-}
+cat <<EOF | sudo tee /etc/modules-load.d/containerd.conf
+overlay
+br_netfilter
+EOF
+sudo modprobe overlay
+sudo modprobe br_netfilter
+cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-iptables  = 1
+net.ipv4.ip_forward                 = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+EOF
+
+sudo sysctl --system
+
+sudo mkdir -p /etc/containerd
+containerd config default | sed 's/SystemdCgroup = false/SystemdCgroup = true/' | sudo tee /etc/containerd/config.toml
+sudo systemctl restart containerd
+
+cat <<EOF | sudo tee /etc/crictl.yaml
+runtime-endpoint: unix:///run/containerd/containerd.sock
 EOF
 
 sudo usermod -aG docker "${USER}"
 
-sudo systemctl enable docker
 sudo systemctl daemon-reload
-sudo systemctl restart docker
+sudo systemctl enable containerd docker
+sudo systemctl restart containerd
 
 sudo apt-get install -y kubelet=${KUBE_VERSION}-00 kubeadm=${KUBE_VERSION}-00 kubectl=${KUBE_VERSION}-00
 sudo apt-mark hold kubelet kubeadm kubectl
@@ -83,7 +75,7 @@ Run on **master** `kubemaster` node only:
 ```bash
 # vagrant ssh kubemaster
 
-sudo kubeadm init --kubernetes-version=${KUBE_VERSION} --pod-network-cidr=10.224.0.0/16 --apiserver-advertise-address=192.168.56.2
+sudo kubeadm init --cri-socket /run/containerd/containerd.sock --kubernetes-version=${KUBE_VERSION} --pod-network-cidr=10.224.0.0/16 --apiserver-advertise-address=192.168.56.2 --skip-token-print
 
 mkdir -p "${HOME}/.kube"
 sudo cp -i /etc/kubernetes/admin.conf "${HOME}/.kube/config"
@@ -93,13 +85,15 @@ curl -LO https://github.com/cilium/cilium-cli/releases/latest/download/cilium-li
 sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
 rm cilium-linux-amd64.tar.gz
 cilium install
+
+kubeadm token create --print-join-command --ttl 0
 ```
 
 Run on **worker** `kubenode01` node only:
 
 ```bash
 # vagrant ssh kubenode01
-sudo kubeadm join 192.168.56.2:6443 --token i0sn6a.jnvsbw73yi03nre7 --discovery-token-ca-cert-hash sha256:ffa3c5c3cd8ee55bd9497e8d6d9556d3bcef7b0879f871a088819f232c4673e0
+sudo kubeadm join --cri-socket /run/containerd/containerd.sock --kubernetes-version=${KUBE_VERSION} 192.168.56.2:6443 --token i0sn6a.jnvsbw73yi03nre7 --discovery-token-ca-cert-hash sha256:ffa3c5c3cd8ee55bd9497e8d6d9556d3bcef7b0879f871a088819f232c4673e0
 ```
 
 ## Kubernetes certificates
@@ -985,4 +979,84 @@ $ kubectl get nodes
 NAME         STATUS                     ROLES                  AGE   VERSION
 kubemaster   Ready                      control-plane,master   53m   v1.20.10
 kubenode01   Ready,SchedulingDisabled   <none>                 52m   v1.20.10
+```
+
+## Kubernetes Secrets
+
+### Create pod with secrets
+
+Create secrets:
+
+```bash
+kubectl create secret generic secret1 --from-literal username=admin1 --from-literal password=admin123
+kubectl create secret generic secret2 --from-literal username=admin2 --from-literal password=admin321
+```
+
+Create pod which will use the secrets:
+
+```bash
+kubectl apply -f - << EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mypod
+spec:
+  containers:
+  - name: mypod
+    image: nginx
+    env:
+      - name: USERNAME
+        valueFrom:
+          secretKeyRef:
+            name: secret2
+            key: username
+      - name: PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: secret2
+            key: password
+    volumeMounts:
+    - name: secret1
+      mountPath: "/secret1"
+      readOnly: true
+  volumes:
+  - name: secret1
+    secret:
+      secretName: secret1
+EOF
+```
+
+Check the secrets inside the containers:
+
+```text
+$ kubectl exec -it mypod -- bash -xc 'ls /secret1 ; echo $(cat /secret1/username); echo $(cat /secret1/password)'
++ ls /secret1
+password  username
+++ cat /secret1/username
++ echo admin1
+admin1
+++ cat /secret1/password
++ echo admin123
+admin123
+
+$ kubectl exec -it mypod -- env | grep -E '(USERNAME|PASSWORD)'
+USERNAME=admin2
+PASSWORD=admin321
+```
+
+### Access secrets "non-k8s" way
+
+```text
+# vagrant ssh kubenode01
+
+$ sudo crictl ps
+...
+CONTAINER ID        IMAGE                                                                                           CREATED             STATE               NAME                ATTEMPT             POD ID
+028f01022bc38       nginx@sha256:06e4235e95299b1d6d595c5ef4c41a9b12641f6683136c18394b858967cd1506                   13 minutes ago      Running             mypod               0                   93f3907acf6c2
+...
+```
+
+Check the container details:
+
+```text
 ```
