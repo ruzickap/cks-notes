@@ -30,7 +30,7 @@ sudo curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://pack
 echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
 
 sudo apt-get update
-sudo apt-get install -y apt-transport-https ca-certificates containerd curl docker.io jq lsb-release mc tree
+sudo apt-get install -y apt-transport-https ca-certificates containerd curl docker.io etcd-client jq lsb-release mc tree
 
 cat <<EOF | sudo tee /etc/modules-load.d/containerd.conf
 overlay
@@ -983,6 +983,8 @@ kubenode01   Ready,SchedulingDisabled   <none>                 52m   v1.20.10
 
 ## Kubernetes Secrets
 
+[Encrypting Secret Data at Rest](https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/)
+
 ### Create pod with secrets
 
 Create secrets:
@@ -1051,12 +1053,144 @@ PASSWORD=admin321
 
 $ sudo crictl ps
 ...
-CONTAINER ID        IMAGE                                                                                           CREATED             STATE               NAME                ATTEMPT             POD ID
-028f01022bc38       nginx@sha256:06e4235e95299b1d6d595c5ef4c41a9b12641f6683136c18394b858967cd1506                   13 minutes ago      Running             mypod               0                   93f3907acf6c2
+CONTAINER ID        IMAGE               CREATED             STATE               NAME                ATTEMPT             POD ID
+879e08f431dd5       f8f4ffc8092c9       35 seconds ago      Running             mypod               0                   57c9f78887129
 ...
 ```
 
-Check the container details:
+Check the container details where you can see the unencrypted environment
+variables:
 
 ```text
+$ sudo crictl inspect 879e08f431dd5
+...
+    "runtimeSpec": {
+      "ociVersion": "1.0.2-dev",
+      "process": {
+        "user": {
+          "uid": 0,
+          "gid": 0
+        },
+        "args": [
+          "/docker-entrypoint.sh",
+          "nginx",
+          "-g",
+          "daemon off;"
+        ],
+        "env": [
+...
+          "USERNAME=admin2",
+          "PASSWORD=admin321",
+...
+```
+
+Let's check the values which are being mounted using the volumes:
+
+```text
+$ sudo crictl inspect 879e08f431dd5 | jq '.info.pid'
+8661
+
+$ sudo ls -l /proc/8661/root/secret1
+total 0
+lrwxrwxrwx 1 root root 15 Oct 11 11:02 password -> ..data/password
+lrwxrwxrwx 1 root root 15 Oct 11 11:02 username -> ..data/username
+```
+
+### ETCD
+
+Find ETCD details
+
+```text
+# cat /etc/kubernetes/manifests/kube-apiserver.yaml | grep etcd
+    - --etcd-cafile=/etc/kubernetes/pki/etcd/ca.crt
+    - --etcd-certfile=/etc/kubernetes/pki/apiserver-etcd-client.crt
+    - --etcd-keyfile=/etc/kubernetes/pki/apiserver-etcd-client.key
+    - --etcd-servers=https://127.0.0.1:2379
+```
+
+```text
+# ETCDCTL_API=3 etcdctl endpoint health \
+  --cert=/etc/kubernetes/pki/apiserver-etcd-client.crt \
+  --key=/etc/kubernetes/pki/apiserver-etcd-client.key \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt
+127.0.0.1:2379 is healthy: successfully committed proposal: took = 876.099µs
+```
+
+```text
+ETCDCTL_API=3 etcdctl get /registry/secrets/default/secret2 \
+  --cert=/etc/kubernetes/pki/apiserver-etcd-client.crt \
+  --key=/etc/kubernetes/pki/apiserver-etcd-client.key \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt
+...
+?{"f:data":{".":{},"f:password":{},"f:username":{}},"f:type":{}}
+passworadmin321
+usernameadmin2Opaque"
+...
+```
+
+### Encrypt secrets in ETCD
+
+Create `EncryptionConfiguration` for API server:
+
+```bash
+mkdir /etc/kubernetes/etcd
+cat > /etc/kubernetes/etcd/encryptionconfiguration.yaml << EOF
+apiVersion: apiserver.config.k8s.io/v1
+kind: EncryptionConfiguration
+resources:
+  - resources:
+    - secrets
+    providers:
+    - aescbc:
+        keys:
+        - name: key1
+          secret: c2VjcmV0IGlzIHNlY3VyZQ==
+    - identity: {}
+EOF
+```
+
+Change API server to use the encryption:
+
+```text
+# vi /etc/kubernetes/manifests/kube-apiserver.yaml
+...
+spec:
+  containers:
+  - command:
+    - kube-apiserver
+    - --encryption-provider-config=/etc/kubernetes/etcd/encryptionconfiguration.yaml
+...
+    volumeMounts:
+    - mountPath: /etc/kubernetes/etcd
+      name: etcd
+      readOnly: true
+...
+  volumes:
+  - hostPath:
+      path: /etc/kubernetes/etcd
+      type: DirectoryOrCreate
+    name: etcd
+```
+
+Create test secret which should be encrypted in ETCD:
+
+```bash
+kubectl create secret generic secret3 --from-literal username=admin3 --from-literal password=admin567
+```
+
+Read the secret from ETCD - it should be encrypted:
+
+```text
+ETCDCTL_API=3 etcdctl get /registry/secrets/default/secret3 \
+  --cert=/etc/kubernetes/pki/apiserver-etcd-client.crt \
+  --key=/etc/kubernetes/pki/apiserver-etcd-client.key \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  | hexdump -C
+00000000  2f 72 65 67 69 73 74 72  79 2f 73 65 63 72 65 74  |/registry/secret|
+00000010  73 2f 64 65 66 61 75 6c  74 2f 73 65 63 72 65 74  |s/default/secret|
+00000020  33 0a 6b 38 73 3a 65 6e  63 3a 61 65 73 63 62 63  |3.k8s:enc:aescbc|
+00000030  3a 76 31 3a 6b 65 79 31  3a f6 a9 70 c6 88 73 ef  |:v1:key1:..p..s.|
+00000040  94 ca 74 d9 7e 8e 98 88  e0 ad 82 0a 44 67 72 17  |..t.~.......Dgr.|
+00000050  6b 19 0d 62 f7 9b ec ed  57 40 a6 8f c4 87 d6 9c  |k..b....W@......|
+...
 ```
