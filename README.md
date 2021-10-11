@@ -291,7 +291,7 @@ kubectl create clusterrolebinding kubernetes-dashboard-view-all --serviceaccount
 Configure `NodePort` "access":
 
 ```bash
-kubectl patch svc -n kubernetes-dashboard kubernetes-dashboard --type='json' -p '[{"op":"replace","path":"/spec/type","value":"NodePort"}]'
+kubectl patch service -n kubernetes-dashboard kubernetes-dashboard --type='json' -p '[{"op":"replace","path":"/spec/type","value":"NodePort"}]'
 ```
 
 Edit configuration by running
@@ -330,11 +330,11 @@ Install `ingress-nginx` and delete "NetworkPolicies" + "Services" + "Pods":
 
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.0.3/deploy/static/provider/baremetal/deploy.yaml
-kubectl delete networkpolicies,svc,pods --all
+kubectl delete networkpolicies,service,pods --all
 ```
 
 ```text
-$ kubectl get pods,svc -n ingress-nginx
+$ kubectl get pods,service -n ingress-nginx
 NAME                                            READY   STATUS              RESTARTS   AGE
 pod/ingress-nginx-admission-create--1-hb24s     0/1     Completed           0          13s
 pod/ingress-nginx-admission-patch--1-znw8z      0/1     Completed           0          13s
@@ -637,6 +637,8 @@ default-token-g7sgk   kubernetes.io/service-account-token   3      3h51m
 
 ## Service Accounts
 
+It is a good practice for application to have it's own ServiceAccount.
+
 ```text
 $ kubectl get serviceaccount,secrets
 NAME                     SECRETS   AGE
@@ -698,6 +700,138 @@ $ find /run/secrets/kubernetes.io/serviceaccount
 
 ### Disable automount of the ServiceAccount token in the pod
 
+[Configure Service Accounts for Pods](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/)
+
 ```yaml
 automountServiceAccountToken: false
+```
+
+## API Access
+
+By default the k8s API accepts the "anonymous requests". Access is deied for
+`system:anonymous` user:
+
+```text
+$ curl -k https://localhost:6443
+{
+  "kind": "Status",
+  "apiVersion": "v1",
+  "metadata": {
+
+  },
+  "status": "Failure",
+  "message": "forbidden: User \"system:anonymous\" cannot get path \"/\"",
+  "reason": "Forbidden",
+  "details": {
+
+  },
+  "code": 403
+}
+```
+
+Disable anonymous API requests:
+
+```text
+sudo vi /etc/kubernetes/manifests/kube-apiserver.yaml
+...
+- --anonymous-auth=false
+...
+```
+
+```text
+$ curl -k https://localhost:6443
+{
+  "kind": "Status",
+  "apiVersion": "v1",
+  "metadata": {
+
+  },
+  "status": "Failure",
+  "message": "Unauthorized",
+  "reason": "Unauthorized",
+  "code": 401
+}
+```
+
+Put it back, because `kube-apiserver` needs anonymous API requests for it's own
+livenes probes.
+
+### Manual API request using curl
+
+Extract data from "kubeconfig" file:
+
+```bash
+kubectl config view --raw -o jsonpath='{.clusters[?(@.name=="kubernetes")].cluster.certificate-authority-data}' | base64 -d > ca
+kubectl config view --raw -o jsonpath='{.users[?(@.name=="kubernetes-admin")].user.client-certificate-data}' | base64 -d > crt
+kubectl config view --raw -o jsonpath='{.users[?(@.name=="kubernetes-admin")].user.client-key-data}' | base64 -d > key
+SERVER=$(kubectl config view --raw -o jsonpath='{.clusters[?(@.name=="kubernetes")].cluster.server}')
+echo "${SERVER}"
+```
+
+Access the k8s cluster using certificates and ca:
+
+```text
+$ curl -s "${SERVER}" --cacert ca --cert crt --key key | jq
+{
+  "paths": [
+    "/.well-known/openid-configuration",
+...
+    "/version"
+  ]
+}
+```
+
+### Eneble k8s API for external access
+
+[Controlling Access to the Kubernetes API](https://kubernetes.io/docs/concepts/security/controlling-access/)
+
+Verify which IP addresses are allowed to connect to k8s API. You should see your
+external IP there `192.168.56.2`:
+
+```text
+$ openssl x509 -in /etc/kubernetes/pki/apiserver.crt -text
+...
+X509v3 Subject Alternative Name:
+                DNS:kubemaster, DNS:kubernetes, DNS:kubernetes.default, DNS:kubernetes.default.svc, DNS:kubernetes.default.svc.cluster.local, IP Address:10.96.0.1, IP Address:192.168.56.2
+...
+```
+
+Check the kubernetes service:
+
+```text
+$ kubectl get service kubernetes
+NAME         TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+kubernetes   ClusterIP   10.96.0.1    <none>        443/TCP   37h
+```
+
+Change the service to `NodePort`
+
+```bash
+kubectl patch service kubernetes --type='json' -p '[{"op":"replace","path":"/spec/type","value":"NodePort"}]'
+```
+
+Find the "NodePort" port which is accessible externally:
+
+```text
+$ kubectl get service kubernetes
+NAME         TYPE       CLUSTER-IP   EXTERNAL-IP   PORT(S)         AGE
+kubernetes   NodePort   10.96.0.1    <none>        443:32689/TCP   37h
+```
+
+Copy the kubeconfig to the machine where you are running the vagrant:
+
+```bash
+vagrant ssh kubemaster -c "kubectl config view --raw" > local.conf
+```
+
+Replace the server parameter with the external IP and "NodePort port:
+
+```bash
+sed -i 's@\(.*server: https:\).*@\1//192.168.56.2:32689@' local.conf
+```
+
+Check if you can see the namespaces:
+
+```bash
+kubectl --kubeconfig=local.conf get ns
 ```
