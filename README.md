@@ -1194,3 +1194,37 @@ ETCDCTL_API=3 etcdctl get /registry/secrets/default/secret3 \
 00000050  6b 19 0d 62 f7 9b ec ed  57 40 a6 8f c4 87 d6 9c  |k..b....W@......|
 ...
 ```
+
+## Container Runtime
+
+[Runtime Class](https://kubernetes.io/docs/concepts/containers/runtime-class/)
+
+Create `RuntimeClass` for gvisor:
+
+```bash
+kubectl apply -f - << EOF
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: gvisor
+handler: runsc
+EOF
+```
+
+Crate pod
+
+```bash
+kubectl apply -f - << EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: gvisor
+  name: gvisor
+spec:
+  runtimeClassName: gvisor
+  containers:
+  - image: gvisor
+    name: nginx
+EOF
+```
