@@ -1228,3 +1228,265 @@ spec:
     name: nginx
 EOF
 ```
+
+## Container security
+
+[Configure a Security Context for a Pod or Container](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/)
+
+### Security Context
+
+```bash
+kubectl run busybox --image=busybox --command --dry-run=client -o yaml -- sh -c 'sleep 1d'
+```
+
+Create busybox pod:
+
+```bash
+kubectl run busybox --image=busybox --command --dry-run=client -o yaml -- sh -c 'sleep 1d'
+```
+
+```bash
+kubectl apply -f - << EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: busybox
+  name: busybox
+spec:
+  containers:
+  - command:
+    - sh
+    - -c
+    - sleep 1d
+    image: busybox
+    name: busybox
+  restartPolicy: Never
+EOF
+```
+
+The pod is running as "root":
+
+```text
+$ kubectl exec -it busybox -- sh -c 'set -x ; id ; touch /test123 ; ls -l /test123'
++ id
+uid=0(root) gid=0(root) groups=10(wheel)
++ touch /test123
++ ls -l /test123
+-rw-r--r--    1 root     root             0 Oct 12 05:20 /test123
+```
+
+Add `SecurityContext` to the pod definition:
+
+```bash
+kubectl apply --force=true --grace-period=1 -f - << EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: busybox
+  name: busybox
+spec:
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 3000
+  containers:
+  - command:
+    - sh
+    - -c
+    - sleep 1d
+    image: busybox
+    name: busybox
+  restartPolicy: Never
+EOF
+```
+
+Check permissions:
+
+```text
+$ kubectl exec -it busybox -- sh -c 'set -x ; id ; touch /tmp/test123 ; ls -l /tmp/test123'
++ id
+uid=1000 gid=3000 groups=2000
++ touch /tmp/test123
++ ls -l /tmp/test123
+-rw-r--r--    1 1000     3000             0 Oct 12 05:19 /tmp/test123
+```
+
+### Priviledged containers and PrivilegeEscalations
+
+[Privileged](https://kubernetes.io/docs/concepts/policy/pod-security-policy/#privileged)
+
+Container "root" user is mapped to the host "root" user.
+
+```bash
+kubectl apply --force=true --grace-period=1 -f - << EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: busybox
+  name: busybox
+spec:
+  containers:
+  - command:
+    - sh
+    - -c
+    - sleep 1d
+    image: busybox
+    name: busybox
+    securityContext:
+      privileged: true
+  restartPolicy: Never
+EOF
+```
+
+Check permissions:
+
+```text
+$ kubectl exec -it busybox -- sh -c 'set -x ; sysctl kernel.hostname=attacker'
++ sysctl 'kernel.hostname=attacker'
+kernel.hostname = attacker
+```
+
+### Pod Security Policy
+
+[Pod Security Policies](https://kubernetes.io/docs/concepts/policy/pod-security-policy/)
+
+PodSecurityPolicy is deprecated ([PodSecurityPolicy Deprecation: Past, Present, and Future](https://kubernetes.io/blog/2021/04/06/podsecuritypolicy-deprecation-past-present-and-future/))
+and your should use [Kyverno](https://github.com/kyverno/kyverno/) or [OPA/Gatekeeper](https://github.com/open-policy-agent/gatekeeper/)
+instead.
+
+[Create a policy and a pod](https://kubernetes.io/docs/concepts/policy/pod-security-policy/#create-a-policy-and-a-pod)
+
+Create new namespace and pod which stores the date in `/tmp/date` on the host:
+
+```bash
+kubectl create namespace my-namespace
+kubectl apply -f - << EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: my-busybox
+  name: my-busybox
+  namespace: my-namespace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: my-busybox
+  template:
+    metadata:
+      labels:
+        app: my-busybox
+    spec:
+      containers:
+      - command: ["sh", "-c", "while true ; do date | tee /tmp/date ; sleep 5 ; done" ]
+        image: busybox
+        name: busybox
+        volumeMounts:
+        - mountPath: /tmp
+          name: test-volume
+      volumes:
+      - name: test-volume
+        hostPath:
+          path: /tmp
+EOF
+
+kubectl exec -it -n my-namespace "$(kubectl get pod -n my-namespace -l app=my-busybox --no-headers -o custom-columns=':metadata.name')" -- cat /tmp/date
+```
+
+Enable admission Plugin PodSecurityPolicy in the API server:
+
+```text
+sudo vi /etc/kubernetes/manifests/kube-apiserver.yaml
+...
+- --enable-admission-plugins=NodeRestriction,PodSecurityPolicy
+...
+```
+
+Create psp which doesn't allow `allowPrivilegeEscalation` or `privileged` and
+allows usage of `HostPaths` for `/var/tmp` only:
+
+```bash
+kubectl apply -f - << EOF
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: default
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  allowedHostPaths:
+  - pathPrefix: /var/tmp
+  allowedCapabilities:
+  - NET_ADMIN
+  - IPC_LOCK
+  seLinux:
+    rule: RunAsAny
+  supplementalGroups:
+    rule: RunAsAny
+  runAsUser:
+    rule: RunAsAny
+  fsGroup:
+    rule: RunAsAny
+  volumes:
+  - '*'
+EOF
+```
+
+Create `Role` and `RoleBinding` which allows to use "podsecuritypolicies":
+
+```bash
+kubectl create clusterrole psp-access --verb=use --resource=podsecuritypolicies
+kubectl create clusterrolebinding psp-access --clusterrole=psp-access --group=system:serviceaccounts:my-namespace --namespace=my-namespace
+```
+
+All pods in `my-namespace` are allowed to use `HostPaths` in `/var/tmp/`.
+If I restart the pod I got:
+
+```text
+$ kubectl delete pod -n my-namespace --all
+$ kubectl describe replicasets.apps -n my-namespace
+...
+Events:
+  Type     Reason            Age                    From                   Message
+  ----     ------            ----                   ----                   -------
+  Normal   SuccessfulCreate  13m                    replicaset-controller  Created pod: my-busybox-7d5b7688f9-wh655
+  Warning  FailedCreate      4m5s (x17 over 4m46s)  replicaset-controller  Error creating: pods "my-busybox-7d5b7688f9-" is forbidden: PodSecurityPolicy: unable to admit pod: [spec.volumes[0].hostPath.pathPrefix: Invalid value: "/tmp": is not allowed to be used]
+```
+
+It's necessary to change the deployment to use `/var/tmp/` instead of `/tmp/`:
+
+```bash
+kubectl apply -f - << EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: my-busybox
+  name: my-busybox
+  namespace: my-namespace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: my-busybox
+  template:
+    metadata:
+      labels:
+        app: my-busybox
+    spec:
+      containers:
+      - command: ["sh", "-c", "while true ; do date | tee /tmp/date ; sleep 5 ; done" ]
+        image: busybox
+        name: busybox
+        volumeMounts:
+        - mountPath: /tmp
+          name: test-volume
+      volumes:
+      - name: test-volume
+        hostPath:
+          path: /tmp
+EOF
+```
