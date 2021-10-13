@@ -1490,3 +1490,120 @@ spec:
           path: /tmp
 EOF
 ```
+
+## Open Policy Agent (OPA)
+
+[OPA Gatekeeper: Policy and Governance for Kubernetes](https://kubernetes.io/blog/2019/08/06/opa-gatekeeper-policy-and-governance-for-kubernetes/)
+
+Install Gatekeeper:
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/open-policy-agent/gatekeeper/release-3.5/deploy/gatekeeper.yaml
+```
+
+Check the CRDs:
+
+```text
+$ kubectl get crd | grep gatekeeper
+configs.config.gatekeeper.sh                         2021-10-12T10:23:31Z
+constraintpodstatuses.status.gatekeeper.sh           2021-10-12T10:23:31Z
+constrainttemplatepodstatuses.status.gatekeeper.sh   2021-10-12T10:23:31Z
+constrainttemplates.templates.gatekeeper.sh          2021-10-12T10:23:31Z
+k8strustedimages.constraints.gatekeeper.sh           2021-10-12T10:41:26Z
+```
+
+Block pod to get image from `k8s.gcr.io` container registry.
+
+Create `ConstraintTemplate`:
+
+```bash
+kubectl apply -f - << EOF
+apiVersion: templates.gatekeeper.sh/v1beta1
+kind: ConstraintTemplate
+metadata:
+  name: k8strustedimages
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sTrustedImages
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8strustedimages
+        violation[{"msg": msg}] {
+          image := input.review.object.spec.containers[_].image
+          startswith(image, "k8s.gcr.io/")
+          msg := "Using images from k8s.gcr.io is not allowed !"
+        }
+EOF
+```
+
+Create `K8sTrustedImages` constraint
+
+```bash
+kubectl apply -f - << EOF
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sTrustedImages
+metadata:
+  name: pod-trusted-images
+spec:
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+EOF
+```
+
+Try it:
+
+```text
+$ kubectl run pause --image=k8s.gcr.io/pause:3.1
+Error from server ([pod-trusted-images] Using images from k8s.gcr.io is not allowed !): admission webhook "validation.gatekeeper.sh" denied the request: [pod-trusted-images] Using images from k8s.gcr.io is not allowed !
+```
+
+```text
+$ kubectl describe K8sTrustedImages pod-trusted-images
+Name:         pod-trusted-images
+...
+Status:
+  Audit Timestamp:  2021-10-12T10:56:48Z
+  By Pod:
+    Constraint UID:       39aaf68c-2921-42ec-977e-0c63f6623764
+    Enforced:             true
+    Id:                   gatekeeper-audit-6c558d7455-fv8c5
+    Observed Generation:  1
+    Operations:
+      audit
+      status
+    Constraint UID:       39aaf68c-2921-42ec-977e-0c63f6623764
+    Enforced:             true
+    Id:                   gatekeeper-controller-manager-ff8849b64-nh65b
+    Observed Generation:  1
+...
+  Total Violations:  8
+  Violations:
+    Enforcement Action:  deny
+    Kind:                Pod
+    Message:             Using images from k8s.gcr.io is not allowed !
+    Name:                coredns-558bd4d5db-k6qfn
+    Namespace:           kube-system
+    Enforcement Action:  deny
+    Kind:                Pod
+    Message:             Using images from k8s.gcr.io is not allowed !
+    Name:                coredns-558bd4d5db-q9mzm
+    Namespace:           kube-system
+    Enforcement Action:  deny
+    Kind:                Pod
+    Message:             Using images from k8s.gcr.io is not allowed !
+    Name:                etcd-kubemaster
+    Namespace:           kube-system
+...
+Events:                  <none>
+```
+
+Delete all "Constraints" and "ConstraintTemplates":
+
+```bash
+kubectl delete K8sTrustedImages,ConstraintTemplates --all
+```
