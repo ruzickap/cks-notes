@@ -1534,6 +1534,7 @@ spec:
         violation[{"msg": msg}] {
           image := input.review.object.spec.containers[_].image
           startswith(image, "k8s.gcr.io/")
+          # not startswith(image, "k8s.gcr.io/")  # allow / whitelist registry
           msg := "Using images from k8s.gcr.io is not allowed !"
         }
 EOF
@@ -1608,7 +1609,7 @@ Delete all "Constraints" and "ConstraintTemplates":
 kubectl delete K8sTrustedImages,ConstraintTemplates --all
 ```
 
-## Image vulnerability scanning - Trivy
+## Image vulnerability scanning
 
 * [Trivy documentation](https://aquasecurity.github.io/trivy/)
 * [Installation](https://aquasecurity.github.io/trivy/v0.20.0/getting-started/installation/):
@@ -1623,9 +1624,9 @@ Check vulnerabilities:
 
 ```text
 $ trivy image nginx
-2021-10-13T07:09:27.105Z	INFO	Detected OS: debian
-2021-10-13T07:09:27.105Z	INFO	Detecting Debian vulnerabilities...
-2021-10-13T07:09:27.129Z	INFO	Number of language-specific files: 0
+2021-10-13T07:09:27.105Z  INFO  Detected OS: debian
+2021-10-13T07:09:27.105Z  INFO  Detecting Debian vulnerabilities...
+2021-10-13T07:09:27.129Z  INFO  Number of language-specific files: 0
 
 nginx (debian 10.11)
 ====================
@@ -1637,9 +1638,9 @@ Check `CRITICAL` only:
 
 ```text
 $ trivy image --severity CRITICAL nginx
-2021-10-13T07:10:21.860Z	INFO	Detected OS: debian
-2021-10-13T07:10:21.860Z	INFO	Detecting Debian vulnerabilities...
-2021-10-13T07:10:21.881Z	INFO	Number of language-specific files: 0
+2021-10-13T07:10:21.860Z  INFO  Detected OS: debian
+2021-10-13T07:10:21.860Z  INFO  Detecting Debian vulnerabilities...
+2021-10-13T07:10:21.881Z  INFO  Number of language-specific files: 0
 
 nginx (debian 10.11)
 ====================
@@ -1664,4 +1665,18 @@ Total: 4 (CRITICAL: 4)
 |          | CVE-2021-35942   |          |                   |               | glibc: Arbitrary read in wordexp()    |
 |          |                  |          |                   |               | -->avd.aquasec.com/nvd/cve-2021-35942 |
 +----------+------------------+----------+-------------------+---------------+---------------------------------------+
+```
+
+List all images in the cluster:
+
+```bash
+kubectl get pods -A --no-headers -o=custom-columns='DATA:spec.containers[*].image'
+```
+
+List all container images which have `CRITICAL` vulnerability:
+
+```bash
+while read -r CONTAINER_IMAGE ; do
+  trivy image --severity CRITICAL "${CONTAINER_IMAGE}"
+done < <(kubectl get pods -A --no-headers -o=custom-columns='DATA:spec.containers[*].image')
 ```
