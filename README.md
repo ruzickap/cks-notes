@@ -1607,3 +1607,61 @@ Delete all "Constraints" and "ConstraintTemplates":
 ```bash
 kubectl delete K8sTrustedImages,ConstraintTemplates --all
 ```
+
+## Image vulnerability scanning - Trivy
+
+* [Trivy documentation](https://aquasecurity.github.io/trivy/)
+* [Installation](https://aquasecurity.github.io/trivy/v0.20.0/getting-started/installation/):
+
+Install trivy:
+
+```bash
+curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin v0.20.0
+```
+
+Check vulnerabilities:
+
+```text
+$ trivy image nginx
+2021-10-13T07:09:27.105Z	INFO	Detected OS: debian
+2021-10-13T07:09:27.105Z	INFO	Detecting Debian vulnerabilities...
+2021-10-13T07:09:27.129Z	INFO	Number of language-specific files: 0
+
+nginx (debian 10.11)
+====================
+Total: 172 (UNKNOWN: 0, LOW: 125, MEDIUM: 17, HIGH: 26, CRITICAL: 4)
+...
+```
+
+Check `CRITICAL` only:
+
+```text
+$ trivy image --severity CRITICAL nginx
+2021-10-13T07:10:21.860Z	INFO	Detected OS: debian
+2021-10-13T07:10:21.860Z	INFO	Detecting Debian vulnerabilities...
+2021-10-13T07:10:21.881Z	INFO	Number of language-specific files: 0
+
+nginx (debian 10.11)
+====================
+Total: 4 (CRITICAL: 4)
+
++----------+------------------+----------+-------------------+---------------+---------------------------------------+
+| LIBRARY  | VULNERABILITY ID | SEVERITY | INSTALLED VERSION | FIXED VERSION |                 TITLE                 |
++----------+------------------+----------+-------------------+---------------+---------------------------------------+
+| libc-bin | CVE-2021-33574   | CRITICAL | 2.28-10           |               | glibc: mq_notify does                 |
+|          |                  |          |                   |               | not handle separately                 |
+|          |                  |          |                   |               | allocated thread attributes           |
+|          |                  |          |                   |               | -->avd.aquasec.com/nvd/cve-2021-33574 |
++          +------------------+          +                   +---------------+---------------------------------------+
+|          | CVE-2021-35942   |          |                   |               | glibc: Arbitrary read in wordexp()    |
+|          |                  |          |                   |               | -->avd.aquasec.com/nvd/cve-2021-35942 |
++----------+------------------+          +                   +---------------+---------------------------------------+
+| libc6    | CVE-2021-33574   |          |                   |               | glibc: mq_notify does                 |
+|          |                  |          |                   |               | not handle separately                 |
+|          |                  |          |                   |               | allocated thread attributes           |
+|          |                  |          |                   |               | -->avd.aquasec.com/nvd/cve-2021-33574 |
++          +------------------+          +                   +---------------+---------------------------------------+
+|          | CVE-2021-35942   |          |                   |               | glibc: Arbitrary read in wordexp()    |
+|          |                  |          |                   |               | -->avd.aquasec.com/nvd/cve-2021-35942 |
++----------+------------------+----------+-------------------+---------------+---------------------------------------+
+```
