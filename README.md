@@ -30,7 +30,7 @@ sudo curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://pack
 echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
 
 sudo apt-get update
-sudo apt-get install -y apt-transport-https ca-certificates containerd curl docker.io etcd-client jq lsb-release mc tree
+sudo apt-get install -y apt-transport-https ca-certificates containerd curl docker.io etcd-client jq lsb-release mc strace tree
 
 cat <<EOF | sudo tee /etc/modules-load.d/containerd.conf
 overlay
@@ -1679,4 +1679,148 @@ List all container images which have `CRITICAL` vulnerability:
 while read -r CONTAINER_IMAGE ; do
   trivy image --severity CRITICAL "${CONTAINER_IMAGE}"
 done < <(kubectl get pods -A --no-headers -o=custom-columns='DATA:spec.containers[*].image')
+```
+
+## K8s Container and host security
+
+### Access to k8s objects form host
+
+```text
+$ strace -f ls /
+execve("/bin/ls", ["ls", "/"], 0x7ffe01cc7ee0 /* 25 vars */) = 0
+brk(NULL)                               = 0x55b044960000
+access("/etc/ld.so.nohwcap", F_OK)      = -1 ENOENT (No such file or directory)
+access("/etc/ld.so.preload", R_OK)      = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/etc/ld.so.cache", O_RDONLY|O_CLOEXEC) = 3
+fstat(3, {st_mode=S_IFREG|0644, st_size=23060, ...}) = 0
+mmap(NULL, 23060, PROT_READ, MAP_PRIVATE, 3, 0) = 0x7f0bdc05e000
+...
+...
+...
+write(1, "boot  etc  initrd.img  lib\t     "..., 100boot  etc  initrd.img  lib         lost+found  mnt    proc  run   snap  sys  usr  var      vmlinuz.old
+) = 100
+close(1)                                = 0
+close(2)                                = 0
+exit_group(0)                           = ?
++++ exited with 0 +++
+```
+
+```text
+$ strace -cw ls /
+bin   dev  home        initrd.img.old  lib64     media  opt  root  sbin  srv  tmp  vagrant  vmlinuz
+boot  etc  initrd.img  lib         lost+found  mnt    proc  run   snap  sys  usr  var      vmlinuz.old
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 18.82    0.000383          13        30           mmap
+ 17.89    0.000364          15        24           openat
+ 15.14    0.000308          12        26           close
+  8.99    0.000183         183         1           execve
+  8.75    0.000178           7        25           fstat
+  6.93    0.000141          12        12           mprotect
+  6.29    0.000128          64         2           getdents
+  4.37    0.000089          10         9           read
+  3.64    0.000074           9         8         8 access
+  1.47    0.000030          15         2           write
+  1.43    0.000029          15         2         2 statfs
+  1.23    0.000025           8         3           brk
+  1.03    0.000021          11         2           ioctl
+  0.88    0.000018          18         1           munmap
+  0.69    0.000014           7         2           rt_sigaction
+  0.44    0.000009           9         1           stat
+  0.39    0.000008           8         1           futex
+  0.34    0.000007           7         1           rt_sigprocmask
+  0.34    0.000007           7         1           arch_prctl
+  0.34    0.000007           7         1           prlimit64
+  0.29    0.000006           6         1           set_tid_address
+  0.29    0.000006           6         1           set_robust_list
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.002035                   156        10 total
+```
+
+Find the `PID` for `etcd`:
+
+```text
+$ ps -elf | grep etcd
+4 S root      6900  6529  1  80   0 - 2653294 -    Oct12 ?        00:19:39 etcd --advertise-client-urls=https://192.168.56.2:2379 --cert-file=/etc/kubernetes/pki/
+```
+
+Attach the strace to the `etcd` process
+
+```text
+sudo strace -f -p 6900
+```
+
+List the files opened by the `etcd`:
+
+```text
+$ sudo ls -l /proc/6900/fd | grep '/'
+lrwx------ 1 root root 64 Oct 11 18:43 0 -> /dev/null
+l-wx------ 1 root root 64 Oct 12 10:41 108 -> /var/lib/etcd/member/wal/1.tmp
+l-wx------ 1 root root 64 Oct 11 10:52 11 -> /var/lib/etcd/member/wal/0000000000000001-00000000000177e3.wal
+lrwx------ 1 root root 64 Oct 11 10:52 7 -> /var/lib/etcd/member/snap/db
+lr-x------ 1 root root 64 Oct 11 10:52 9 -> /var/lib/etcd/member/wal
+```
+
+Create secret:
+
+```bash
+kubectl create secret generic my-secret --from-literal=password=1234512345
+```
+
+Find the secret `1234512345` in the database file:
+
+```text
+$ sudo strings /proc/6900/fd/7 | grep -B10 1234512345
+#/registry/secrets/default/my-secret
+Secret
+  my-secret
+default"
+*$5dd89c0e-0cd2-4d33-9be7-bb00793df3de2
+kubectl-create
+Update
+FieldsV1:1
+/{"f:data":{".":{},"f:password":{}},"f:type":{}}
+password
+1234512345
+```
+
+Run pod with the secret as environment variable:
+
+```bash
+kubectl apply -f - << EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: secret-test-pod
+spec:
+  containers:
+    - name: test-container
+      image: k8s.gcr.io/busybox
+      command: [ "/bin/sh", "-c", "env ; sleep 3000" ]
+      envFrom:
+      - secretRef:
+          name: my-secret
+  restartPolicy: Never
+EOF
+```
+
+```text
+$ kubectl logs secret-test-pod | grep password
+password=1234512345
+```
+
+```text
+# vagrant ssh kubenode01
+
+$ ps -elf | grep sh
+...
+4 S root     30682 30597  0  80   0 -   794 -      11:26 ?        00:00:00 /bin/sh -c env ; sleep 3000
+...
+```
+
+You can see the `password=1234512345` in the `/proc` directory:
+
+```text
+$ sudo cat /proc/30682/environ
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/binHOSTNAME=secret-test-podpassword=1234512345KUBERNETES_PORT_443_TCP=tcp://10.96.0.1:443KUBERNETES_PORT_443_TCP_PROTO=tcpKUBERNETES_PORT_443_TCP_PORT=443KUBERNETES_PORT_443_TCP_ADDR=10.96.0.1KUBERNETES_SERVICE_HOST=10.96.0.1KUBERNETES_SERVICE_PORT=443KUBERNETES_SERVICE_PORT_HTTPS=443KUBERNETES_PORT=tcp://10.96.0.1:443HOME=/root
 ```
