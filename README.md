@@ -1824,3 +1824,107 @@ You can see the `password=1234512345` in the `/proc` directory:
 $ sudo cat /proc/30682/environ
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/binHOSTNAME=secret-test-podpassword=1234512345KUBERNETES_PORT_443_TCP=tcp://10.96.0.1:443KUBERNETES_PORT_443_TCP_PROTO=tcpKUBERNETES_PORT_443_TCP_PORT=443KUBERNETES_PORT_443_TCP_ADDR=10.96.0.1KUBERNETES_SERVICE_HOST=10.96.0.1KUBERNETES_SERVICE_PORT=443KUBERNETES_SERVICE_PORT_HTTPS=443KUBERNETES_PORT=tcp://10.96.0.1:443HOME=/root
 ```
+
+### Falco
+
+* [Falco documentation](https://falco.org/docs/)
+
+Install Falco:
+
+```text
+# vagrant ssh kubenode01
+
+curl -o install_falco -s https://falco.org/script/install
+sudo bash install_falco
+sudo systemctl daemon-reload
+sudo systemctl start falco
+sudo systemctl enable falco
+```
+
+Monitor `/var/log/syslog` on `kubenode01` when working with Falco:
+
+```bash
+sudo tail -f /var/log/syslog
+```
+
+Login to master node and run test pod:
+
+```bash
+# vagrant ssh kubemaster
+
+kubectl run busybox --image=busybox --restart=Never --command -- sh -c "sleep 3000"
+```
+
+Exec into the pod:
+
+```bash
+kubectl exec -it busybox -- sh
+```
+
+Falco should report something like:
+
+```text
+Oct 13 12:33:36 kubenode01 falco[4717]: 12:33:36.936085881: Notice A shell was spawned in a container with an attached terminal (user=root user_loginuid=-1 busybox (id=2dd1f809726c) shell=sh parent=runc cmdline=sh terminal=34816 container_id=2dd1f809726c image=docker.io/library/busybox)
+```
+
+Modify the `/etc/passwd` file in the `busybox` pod:
+
+```bash
+echo "user" >> /etc/passwd
+```
+
+Falco should notice it:
+
+```text
+Oct 13 12:36:20 kubenode01 falco[4717]: 12:36:20.448778155: Error File below /etc opened for writing (user=root user_loginuid=-1 command=sh parent=<NA> pcmdline=<NA> file=/etc/passwd program=sh gparent=<NA> ggparent=<NA> gggparent=<NA> container_id=2dd1f809726c image=docker.io/library/busybox)
+```
+
+Run the pod which will periodically run `apt update` to let falco log these
+events:
+
+```bash
+kubectl apply -f - << EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: falco-test-pod
+spec:
+  containers:
+    - name: falco-test-container
+      image: alpine
+      command: [ "/bin/sh", "-c", "while true ; do apk update ; sleep 10; done" ]
+  restartPolicy: Never
+EOF
+```
+
+Chnage the `Launch Package Management Process in Container` rule
+in `/etc/falco/falco_rules.yaml` to log only "container_name" and "image":
+
+```text
+$ sudo vi /etc/falco/falco_rules.local.yaml
+...
+# Container is supposed to be immutable. Package management should be done in building the image.
+- rule: Launch Package Management Process in Container
+  desc: Package management process ran inside container
+  condition: >
+    spawned_process
+    and container
+    and user.name != "_apt"
+    and package_mgmt_procs
+    and not package_mgmt_ancestor_procs
+    and not user_known_package_manager_in_container
+#-> This is the change:
+  output: >
+    %container.name,%container.image.repository:%container.image.tag
+  priority: ERROR
+  tags: [process, mitre_persistence]
+```
+
+Restart Faclo and check the logs:
+
+```text
+$ sudo systemctl restart falco
+$ sudo tail -f /var/log/syslog
+Oct 13 13:18:36 kubenode01 falco[24293]: 13:18:36.830684811: Error falco-test-container,docker.io/library/alpine:latest
+Oct 13 13:18:36 kubenode01 falco: 13:18:36.830684811: Error falco-test-container,docker.io/library/alpine:latest
+```
