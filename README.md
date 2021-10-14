@@ -30,7 +30,7 @@ sudo curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://pack
 echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
 
 sudo apt-get update
-sudo apt-get install -y apt-transport-https ca-certificates containerd curl docker.io etcd-client jq lsb-release mc strace tree
+sudo apt-get install -y apparmor-utils apt-transport-https ca-certificates containerd curl docker.io etcd-client jq lsb-release mc strace tree
 
 cat <<EOF | sudo tee /etc/modules-load.d/containerd.conf
 overlay
@@ -1928,3 +1928,326 @@ $ sudo tail -f /var/log/syslog
 Oct 13 13:18:36 kubenode01 falco[24293]: 13:18:36.830684811: Error falco-test-container,docker.io/library/alpine:latest
 Oct 13 13:18:36 kubenode01 falco: 13:18:36.830684811: Error falco-test-container,docker.io/library/alpine:latest
 ```
+
+## Auditing
+
+Enable Auditing for the k8s cluster:
+
+```text
+$ sudo mkdir -pv /etc/kubernetes/audit
+$ sudo tee /etc/kubernetes/audit/audit-policy.yaml << EOF
+apiVersion: audit.k8s.io/v1
+kind: Policy
+rules:
+- level: Metadata
+EOF
+
+$ sudo vi /etc/kubernetes/manifests/kube-apiserver.yaml
+...
+    - --audit-policy-file=/etc/kubernetes/audit/audit-policy.yaml
+    - --audit-log-path=/etc/kubernetes/audit/logs/audit.log
+    - --audit-log-maxage=2
+    - --audit-log-maxbackup=3
+    - --audit-log-maxsize=1
+...
+    volumeMounts:
+    - mountPath: /etc/kubernetes/audit
+      name: audit
+...
+  volumes:
+  - hostPath:
+      path: /etc/kubernetes/audit
+      type: DirectoryOrCreate
+    name: audit
+...
+...
+```
+
+Create test secret:
+
+```bash
+kubectl create secret generic test-audit-secret --from-literal password=0987654321
+```
+
+Get the auditlog related to `test-audit-secret`:
+
+```text
+$ sudo grep --no-filename test-audit-secret /etc/kubernetes/audit/logs/* | jq
+{
+  "kind": "Event",
+  "apiVersion": "audit.k8s.io/v1",
+  "level": "Metadata",
+  "auditID": "eaf1c7d8-60c9-42e6-9c3a-a2aa0bc47985",
+  "stage": "ResponseComplete",
+  "requestURI": "/api/v1/namespaces/default/secrets?fieldManager=kubectl-create",
+  "verb": "create",
+  "user": {
+    "username": "kubernetes-admin",
+    "groups": [
+      "system:masters",
+      "system:authenticated"
+    ]
+  },
+  "sourceIPs": [
+    "192.168.56.2"
+  ],
+  "userAgent": "kubectl/v1.21.5 (linux/amd64) kubernetes/aea7bba",
+  "objectRef": {
+    "resource": "secrets",
+    "namespace": "default",
+    "name": "test-audit-secret",
+    "apiVersion": "v1"
+  },
+  "responseStatus": {
+    "metadata": {},
+    "code": 201
+  },
+  "requestReceivedTimestamp": "2021-10-13T15:27:09.287836Z",
+  "stageTimestamp": "2021-10-13T15:27:09.296157Z",
+  "annotations": {
+    "authorization.k8s.io/decision": "allow",
+    "authorization.k8s.io/reason": ""
+  }
+}
+```
+
+Change the Audit policy to log details only `ConfigMap`
+
+```bash
+$ sudo tee /etc/kubernetes/audit/audit-policy.yaml << EOF
+apiVersion: audit.k8s.io/v1
+kind: Policy
+rules:
+  - level: RequestResponse
+    userGroups: ["system:authenticated"]
+    nonResourceURLs:
+    - "/api*"
+    - "/version"
+  - level: Metadata
+    resources:
+    - group: ""
+      resources: ["secrets", "configmaps"]
+  - level: None
+EOF
+```
+
+## AppArmor
+
+### AppArmor and Docker
+
+Check the AppArmor status:
+
+```text
+# vagrant ssh kubenode01
+# sudo su -
+
+$ aa-status
+apparmor module is loaded.
+17 profiles are loaded.
+17 profiles are in enforce mode.
+   /sbin/dhclient
+   /usr/bin/lxc-start
+   /usr/bin/man
+   /usr/lib/NetworkManager/nm-dhcp-client.action
+   /usr/lib/NetworkManager/nm-dhcp-helper
+   /usr/lib/connman/scripts/dhclient-script
+   /usr/lib/snapd/snap-confine
+   /usr/lib/snapd/snap-confine//mount-namespace-capture-helper
+   /usr/sbin/tcpdump
+   cri-containerd.apparmor.d
+   docker-default
+   lxc-container-default
+   lxc-container-default-cgns
+   lxc-container-default-with-mounting
+   lxc-container-default-with-nesting
+   man_filter
+   man_groff
+0 profiles are in complain mode.
+7 processes have profiles defined.
+7 processes are in enforce mode.
+   cri-containerd.apparmor.d (6900)
+   cri-containerd.apparmor.d (10512)
+   cri-containerd.apparmor.d (10570)
+   cri-containerd.apparmor.d (30135)
+   cri-containerd.apparmor.d (30192)
+   cri-containerd.apparmor.d (30271)
+   cri-containerd.apparmor.d (30362)
+0 processes are in complain mode.
+0 processes are unconfined but have a profile defined.
+root@kubemaster:/home/vagrant# aa-status
+apparmor module is loaded.
+17 profiles are loaded.
+17 profiles are in enforce mode.
+   /sbin/dhclient
+   /usr/bin/lxc-start
+   /usr/bin/man
+   /usr/lib/NetworkManager/nm-dhcp-client.action
+   /usr/lib/NetworkManager/nm-dhcp-helper
+   /usr/lib/connman/scripts/dhclient-script
+   /usr/lib/snapd/snap-confine
+   /usr/lib/snapd/snap-confine//mount-namespace-capture-helper
+   /usr/sbin/tcpdump
+   cri-containerd.apparmor.d
+   docker-default
+   lxc-container-default
+   lxc-container-default-cgns
+   lxc-container-default-with-mounting
+   lxc-container-default-with-nesting
+   man_filter
+   man_groff
+0 profiles are in complain mode.
+7 processes have profiles defined.
+7 processes are in enforce mode.
+   cri-containerd.apparmor.d (6900)
+   cri-containerd.apparmor.d (10512)
+   cri-containerd.apparmor.d (10570)
+   cri-containerd.apparmor.d (30135)
+   cri-containerd.apparmor.d (30192)
+   cri-containerd.apparmor.d (30271)
+   cri-containerd.apparmor.d (30362)
+0 processes are in complain mode.
+0 processes are unconfined but have a profile defined.
+```
+
+Create apparmor profile for docker + nginx:
+
+```bash
+cat > /etc/apparmor.d/docker-nginx << EOF
+#include <tunables/global>
+
+profile docker-nginx flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+
+  network inet tcp,
+  network inet udp,
+  network inet icmp,
+
+  deny network raw,
+
+  deny network packet,
+
+  file,
+  umount,
+
+  deny /bin/** wl,
+  deny /boot/** wl,
+  deny /dev/** wl,
+  deny /etc/** wl,
+  deny /home/** wl,
+  deny /lib/** wl,
+  deny /lib64/** wl,
+  deny /media/** wl,
+  deny /mnt/** wl,
+  deny /opt/** wl,
+  deny /proc/** wl,
+  deny /root/** wl,
+  deny /sbin/** wl,
+  deny /srv/** wl,
+  deny /tmp/** wl,
+  deny /sys/** wl,
+  deny /usr/** wl,
+
+  audit /** w,
+
+  /var/run/nginx.pid w,
+
+  /usr/sbin/nginx ix,
+
+  deny /bin/dash mrwklx,
+  deny /bin/sh mrwklx,
+  deny /usr/bin/top mrwklx,
+
+
+  capability chown,
+  capability dac_override,
+  capability setuid,
+  capability setgid,
+  capability net_bind_service,
+
+  deny @{PROC}/* w,   # deny write for all files directly in /proc (not in a subdir)
+  # deny write to files not in /proc/<number>/** or /proc/sys/**
+  deny @{PROC}/{[^1-9],[^1-9][^0-9],[^1-9s][^0-9y][^0-9s],[^1-9][^0-9][^0-9][^0-9]*}/** w,
+  deny @{PROC}/sys/[^k]** w,  # deny /proc/sys except /proc/sys/k* (effectively /proc/sys/kernel)
+  deny @{PROC}/sys/kernel/{?,??,[^s][^h][^m]**} w,  # deny everything except shm* in /proc/sys/kernel/
+  deny @{PROC}/sysrq-trigger rwklx,
+  deny @{PROC}/mem rwklx,
+  deny @{PROC}/kmem rwklx,
+  deny @{PROC}/kcore rwklx,
+
+  deny mount,
+
+  deny /sys/[^f]*/** wklx,
+  deny /sys/f[^s]*/** wklx,
+  deny /sys/fs/[^c]*/** wklx,
+  deny /sys/fs/c[^g]*/** wklx,
+  deny /sys/fs/cg[^r]*/** wklx,
+  deny /sys/firmware/** rwklx,
+  deny /sys/kernel/security/** rwklx,
+}
+EOF
+```
+
+```bash
+apparmor_parser /etc/apparmor.d/docker-nginx
+```
+
+```text
+$ aa-status
+apparmor module is loaded.
+18 profiles are loaded.
+18 profiles are in enforce mode.
+...
+   docker-nginx
+...
+```
+
+Run standard docker with nginx image and run shell inside:
+
+```text
+$ docker run -d nginx
+8ba791147b1b7e69d960faf1af5ff134e02572ecabd1b7a4d6087baa58ac4b2e
+$ docker exec -it 8ba791147b1b sh
+# sh
+```
+
+Do the same with apparmor which should block sh from running:
+
+```text
+$ docker run --security-opt apparmor=docker-nginx -d nginx
+b5d752054efbcddb92e753ae9694e3cec734efd6cce207eef4d3fdead8163cc2
+$ docker exec -it b5d752054efb sh
+# sh
+sh: 1: sh: Permission denied
+```
+
+### AppArmor and K8s
+
+```bash
+kubectl apply -f - << EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+  labels:
+    run: nginx
+  annotations:
+    container.apparmor.security.beta.kubernetes.io/my-test-nginx: localhost/docker-nginx
+spec:
+  containers:
+  - image: nginx
+    name: my-test-nginx
+EOF
+```
+
+Get into the pod and run sh (it's not allowed by `docker-nginx` AppArmor
+profile):
+
+```text
+# kubectl exec -it nginx -- bash
+root@nginx:/# sh
+bash: /bin/sh: Permission denied
+```
+
+## seccomp
+
+* [Restrict a Container's Syscalls with seccomp](https://kubernetes.io/docs/tutorials/clusters/seccomp/)
