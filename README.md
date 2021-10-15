@@ -163,7 +163,7 @@ F S UID        PID  PPID  C PRI  NI ADDR SZ WCHAN  STIME TTY          TIME CMD
 
 ## Network Policies
 
-[Network Policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/)
+* [Network Policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/)
 
 Run two test pods + services:
 
@@ -269,7 +269,7 @@ kubectl exec backend -- curl -s database.database.svc.cluster.local
 
 ## Kubernetes Dashboard
 
-[Dashboard arguments](https://github.com/kubernetes/dashboard/blob/master/docs/common/dashboard-arguments.md)
+* [Dashboard arguments](https://github.com/kubernetes/dashboard/blob/master/docs/common/dashboard-arguments.md)
 
 > Do not do this on your production :-)
 
@@ -493,15 +493,22 @@ $ curl -kv https://my-secure-ingress.k8s.cluster.com:31606/app2 --resolve my-sec
 
 ## CIS benchmarks
 
-[CIS Kubernetes Benchmark v1.6.0 - 07-23-2020](https://github.com/cismirror/old-benchmarks-archive/blob/master/CIS_Kubernetes_Benchmark_v1.6.0.pdf)
+* [CIS Kubernetes Benchmark v1.6.0 - 07-23-2020](https://github.com/cismirror/old-benchmarks-archive/blob/master/CIS_Kubernetes_Benchmark_v1.6.0.pdf)
 
 ### kube-bench
 
-[kube-bench](https://github.com/aquasecurity/kube-bench)
+* [kube-bench](https://github.com/aquasecurity/kube-bench)
 
 ```bash
 docker run --pid=host -v /etc:/etc:ro -v /var:/var:ro -v "$(which kubectl):/usr/local/mount-from-host/bin/kubectl" -v ~/.kube:/.kube -e KUBECONFIG=/.kube/config -t aquasec/kube-bench:latest master
 docker run --pid=host -v /etc:/etc:ro -v /var:/var:ro -v "$(which kubectl):/usr/local/mount-from-host/bin/kubectl" -v ~/.kube:/.kube -e KUBECONFIG=/.kube/config -t aquasec/kube-bench:latest node
+```
+
+You can install it locally:
+
+```bash
+wget https://github.com/aquasecurity/kube-bench/releases/download/v0.6.5/kube-bench_0.6.5_linux_amd64.deb
+apt install ./kube-bench_0.6.5_linux_amd64.deb
 ```
 
 ## Hashes
@@ -566,7 +573,7 @@ yes
 
 ## Users and Certificates
 
-[Certificate Signing Requests](https://kubernetes.io/docs/reference/access-authn-authz/certificate-signing-requests/)
+* [Certificate Signing Requests](https://kubernetes.io/docs/reference/access-authn-authz/certificate-signing-requests/)
 
 Create Jane's certificate:
 
@@ -697,7 +704,7 @@ $ find /run/secrets/kubernetes.io/serviceaccount
 
 ### Disable automount of the ServiceAccount token in the pod
 
-[Configure Service Accounts for Pods](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/)
+* [Configure Service Accounts for Pods](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/)
 
 ```yaml
 automountServiceAccountToken: false
@@ -780,7 +787,7 @@ $ curl -s "${SERVER}" --cacert ca --cert crt --key key | jq
 
 ### Eneble k8s API for external access
 
-[Controlling Access to the Kubernetes API](https://kubernetes.io/docs/concepts/security/controlling-access/)
+* [Controlling Access to the Kubernetes API](https://kubernetes.io/docs/concepts/security/controlling-access/)
 
 Verify which IP addresses are allowed to connect to k8s API. You should see your
 external IP there `192.168.56.2`:
@@ -835,7 +842,7 @@ kubectl --kubeconfig=local.conf get ns
 
 ## Kubernetes cluster upgrade
 
-[Upgrading kubeadm clusters](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/)
+* [Upgrading kubeadm clusters](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/)
 
 ### Upgrade master node
 
@@ -983,7 +990,7 @@ kubenode01   Ready,SchedulingDisabled   <none>                 52m   v1.20.10
 
 ## Kubernetes Secrets
 
-[Encrypting Secret Data at Rest](https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/)
+* [Encrypting Secret Data at Rest](https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/)
 
 ### Create pod with secrets
 
@@ -1197,17 +1204,22 @@ ETCDCTL_API=3 etcdctl get /registry/secrets/default/secret3 \
 
 ## Container Runtime
 
-[Runtime Class](https://kubernetes.io/docs/concepts/containers/runtime-class/)
+* [Runtime Class](https://kubernetes.io/docs/concepts/containers/runtime-class/)
 
 Create `RuntimeClass` for gvisor:
 
 ```bash
+kubectl label node kubenode01 runtimeclass=gvisor
+
 kubectl apply -f - << EOF
 apiVersion: node.k8s.io/v1
 kind: RuntimeClass
 metadata:
   name: gvisor
 handler: runsc
+scheduling:
+  nodeSelector:
+    runtimeclass: gvisor
 EOF
 ```
 
@@ -1231,7 +1243,7 @@ EOF
 
 ## Container security
 
-[Configure a Security Context for a Pod or Container](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/)
+* [Configure a Security Context for a Pod or Container](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/)
 
 ### Security Context
 
@@ -1314,7 +1326,7 @@ uid=1000 gid=3000 groups=2000
 
 ### Priviledged containers and PrivilegeEscalations
 
-[Privileged](https://kubernetes.io/docs/concepts/policy/pod-security-policy/#privileged)
+* [Privileged](https://kubernetes.io/docs/concepts/policy/pod-security-policy/#privileged)
 
 Container "root" user is mapped to the host "root" user.
 
@@ -1350,13 +1362,13 @@ kernel.hostname = attacker
 
 ### Pod Security Policy
 
-[Pod Security Policies](https://kubernetes.io/docs/concepts/policy/pod-security-policy/)
+* [Pod Security Policies](https://kubernetes.io/docs/concepts/policy/pod-security-policy/)
 
 PodSecurityPolicy is deprecated ([PodSecurityPolicy Deprecation: Past, Present, and Future](https://kubernetes.io/blog/2021/04/06/podsecuritypolicy-deprecation-past-present-and-future/))
 and your should use [Kyverno](https://github.com/kyverno/kyverno/) or [OPA/Gatekeeper](https://github.com/open-policy-agent/gatekeeper/)
 instead.
 
-[Create a policy and a pod](https://kubernetes.io/docs/concepts/policy/pod-security-policy/#create-a-policy-and-a-pod)
+* [Create a policy and a pod](https://kubernetes.io/docs/concepts/policy/pod-security-policy/#create-a-policy-and-a-pod)
 
 Create new namespace and pod which stores the date in `/tmp/date` on the host:
 
@@ -1493,7 +1505,7 @@ EOF
 
 ## Open Policy Agent (OPA)
 
-[OPA Gatekeeper: Policy and Governance for Kubernetes](https://kubernetes.io/blog/2019/08/06/opa-gatekeeper-policy-and-governance-for-kubernetes/)
+* [OPA Gatekeeper: Policy and Governance for Kubernetes](https://kubernetes.io/blog/2019/08/06/opa-gatekeeper-policy-and-governance-for-kubernetes/)
 
 Install Gatekeeper:
 
@@ -1898,7 +1910,14 @@ EOF
 ```
 
 Chnage the `Launch Package Management Process in Container` rule
-in `/etc/falco/falco_rules.yaml` to log only "container_name" and "image":
+in `/etc/falco/falco_rules.yaml` to log only "container_name" and "image".
+
+You can see the the available fields here: [Supported Fields for Conditions and Outputs](https://falco.org/docs/rules/supported-fields/)
+or using command line:
+
+```bash
+falco --list
+```
 
 ```text
 $ sudo vi /etc/falco/falco_rules.local.yaml
@@ -1925,6 +1944,9 @@ Restart Faclo and check the logs:
 ```text
 $ sudo systemctl restart falco
 $ sudo tail -f /var/log/syslog
+Oct 14 08:07:58 kubenode01 falco: 08:07:58.846428059: Notice A shell was spawned in a container with an attached terminal (user=root user_loginuid=-1 test-nginx (id=73ad43b01267) shell=bash parent=runc cmdline=bash terminal=34816 container_id=73ad43b01267 image=docker.io/library/nginx)
+Oct 13 12:36:20 kubenode01 falco[4717]: 12:36:20.448778155: Error File below /etc opened for writing (user=root user_loginuid=-1 command=sh parent=<NA> pcmdline=<NA> file=/etc/passwd program=sh gparent=<NA> ggparent=<NA> gggparent=<NA> container_id=2dd1f809726c image=docker.io/library/busybox)
+...
 Oct 13 13:18:36 kubenode01 falco[24293]: 13:18:36.830684811: Error falco-test-container,docker.io/library/alpine:latest
 Oct 13 13:18:36 kubenode01 falco: 13:18:36.830684811: Error falco-test-container,docker.io/library/alpine:latest
 ```
