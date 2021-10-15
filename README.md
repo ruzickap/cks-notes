@@ -16,7 +16,7 @@ sed -i 's/NUM_WORKER_NODE = 2/NUM_WORKER_NODE = 1/' Vagrantfile
 vagrant up
 ```
 
-The installation is taken from: [install_master.sh](https://github.com/killer-sh/cks-course-environment/blob/master/cluster-setup/latest/install_master.sh)
+The installation steps are taken from: [install_master.sh](https://github.com/killer-sh/cks-course-environment/blob/master/cluster-setup/latest/install_master.sh)
 
 Run on both k8s nodes (`kubemaster`, `kubenode01`):
 
@@ -808,13 +808,13 @@ NAME         TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
 kubernetes   ClusterIP   10.96.0.1    <none>        443/TCP   37h
 ```
 
-Change the service to `NodePort`
+Change the service to `NodePort`:
 
 ```bash
 kubectl patch service kubernetes --type='json' -p '[{"op":"replace","path":"/spec/type","value":"NodePort"}]'
 ```
 
-Find the "NodePort" port which is accessible externally:
+Find the `NodePort` port which is accessible externally:
 
 ```text
 $ kubectl get service kubernetes
@@ -828,7 +828,7 @@ Copy the kubeconfig to the machine where you are running the vagrant:
 vagrant ssh kubemaster -c "kubectl config view --raw" > local.conf
 ```
 
-Replace the server parameter with the external IP and "NodePort port:
+Replace the server parameter with the external IP and `NodePort` port:
 
 ```bash
 sed -i 's@\(.*server: https:\).*@\1//192.168.56.2:32689@' local.conf
@@ -931,7 +931,7 @@ kubemaster   Ready,SchedulingDisabled   control-plane,master   42m   v1.20.10
 kubenode01   Ready                      <none>                 42m   v1.19.0
 ```
 
-Uncordon the master
+Uncordon the master:
 
 ```bash
 kubectl uncordon kubemaster
@@ -1105,7 +1105,7 @@ lrwxrwxrwx 1 root root 15 Oct 11 11:02 username -> ..data/username
 
 ### ETCD
 
-Find ETCD details
+Find ETCD details:
 
 ```text
 # cat /etc/kubernetes/manifests/kube-apiserver.yaml | grep etcd
@@ -1223,7 +1223,7 @@ scheduling:
 EOF
 ```
 
-Crate pod
+Crate pod:
 
 ```bash
 kubectl apply -f - << EOF
@@ -1246,10 +1246,6 @@ EOF
 * [Configure a Security Context for a Pod or Container](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/)
 
 ### Security Context
-
-```bash
-kubectl run busybox --image=busybox --command --dry-run=client -o yaml -- sh -c 'sleep 1d'
-```
 
 Create busybox pod:
 
@@ -1552,7 +1548,7 @@ spec:
 EOF
 ```
 
-Create `K8sTrustedImages` constraint
+Create `K8sTrustedImages` constraint:
 
 ```bash
 kubectl apply -f - << EOF
@@ -1756,7 +1752,7 @@ $ ps -elf | grep etcd
 4 S root      6900  6529  1  80   0 - 2653294 -    Oct12 ?        00:19:39 etcd --advertise-client-urls=https://192.168.56.2:2379 --cert-file=/etc/kubernetes/pki/
 ```
 
-Attach the strace to the `etcd` process
+Attach the strace to the `etcd` process:
 
 ```text
 sudo strace -f -p 6900
@@ -2033,7 +2029,7 @@ $ sudo grep --no-filename test-audit-secret /etc/kubernetes/audit/logs/* | jq
 }
 ```
 
-Change the Audit policy to log details only `ConfigMap`
+Change the Audit policy to log details only `ConfigMap`:
 
 ```bash
 $ sudo tee /etc/kubernetes/audit/audit-policy.yaml << EOF
