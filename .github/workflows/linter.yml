@@ -17,7 +17,7 @@ name: Lint Code Base
 on:
   push:
 #    branches-ignore:
-#      - 'master'
+#      - main
 
 ###############
 # Set the Job #
@@ -65,3 +65,4 @@ jobs:
           ERROR_ON_MISSING_EXEC_BIT: true
           USE_FIND_ALGORITHM: true
           VALIDATE_JSCPD: false
+          VALIDATE_NATURAL_LANGUAGE: false
