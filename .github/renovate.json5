@@ -1,0 +1,63 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  // # keep-sorted start block=yes
+  "git-submodules": {
+    enabled: true,
+  },
+  // Keep the extends started with ":" at the end of the list to allow overriding
+  extends: [
+    "config:recommended",
+    "docker:pinDigests",
+    "helpers:pinGitHubActionDigestsToSemver",
+    "security:openssf-scorecard",
+    ":disableDependencyDashboard",
+    ":disableRateLimiting",
+    ":docker",
+    ":enableVulnerabilityAlertsWithLabel(security)",
+    ":pinSkipCi",
+  ],
+  labels: [
+    "renovate",
+    "renovate/{{replace '.*/' '' depName}}",
+    "renovate/{{updateType}}",
+  ],
+  lockFileMaintenance: {
+    enabled: true,
+    schedule: ["before 6am on Sunday"],
+  },
+  // Package update rules
+  packageRules: [
+    {
+      description: "Disable auto-merge for major updates",
+      matchUpdateTypes: ["major"],
+      automerge: false,
+    },
+    {
+      description: "Ignore frequent renovate updates",
+      enabled: false,
+      matchPackageNames: ["renovatebot/github-action"],
+      matchUpdateTypes: ["patch"],
+    },
+    {
+      description: "Update renovatebot/github-action minor updates on Sundays",
+      matchPackageNames: ["renovatebot/github-action"],
+      matchUpdateTypes: ["minor"],
+      schedule: ["* * * * 0"],
+    },
+  ],
+  prBodyTemplate: "{{{table}}}{{{notes}}}{{{changelogs}}}",
+  rebaseWhen: "behind-base-branch",
+  // Custom version extraction
+  regexManagers: [
+    {
+      extractVersionTemplate: "{{#if extractVersion}}{{{extractVersion}}}{{else}}^v?(?<version>.+)${{/if}}",
+      fileMatch: ["\\.ya?ml$", "\\.md$", "^Dockerfile$", "^entrypoint\\.sh$"],
+      matchStrings: [
+        '# renovate: datasource=(?<datasource>.+?) depName=(?<depName>.+?)( versioning=(?<versioning>.+?))?( extractVersion=(?<extractVersion>.+?))?( registryUrl=(?<registryUrl>.+?))?\\s.*[=:]\\s*"?(?<currentValue>.+?)"?\\s',
+      ],
+      versioningTemplate: "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}",
+    },
+  ],
+  separateMinorPatch: true,
+  // # keep-sorted end
+}
