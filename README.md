@@ -32,13 +32,13 @@ echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https:/
 sudo apt-get update
 sudo apt-get install -y apparmor-utils apt-transport-https ca-certificates containerd curl docker.io etcd-client jq lsb-release mc strace tree
 
-cat <<EOF | sudo tee /etc/modules-load.d/containerd.conf
+cat << EOF | sudo tee /etc/modules-load.d/containerd.conf
 overlay
 br_netfilter
 EOF
 sudo modprobe overlay
 sudo modprobe br_netfilter
-cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
+cat << EOF | sudo tee /etc/sysctl.d/k8s.conf
 net.bridge.bridge-nf-call-iptables  = 1
 net.ipv4.ip_forward                 = 1
 net.bridge.bridge-nf-call-ip6tables = 1
@@ -50,7 +50,7 @@ sudo mkdir -p /etc/containerd
 containerd config default | sed 's/SystemdCgroup = false/SystemdCgroup = true/' | sudo tee /etc/containerd/config.toml
 sudo systemctl restart containerd
 
-cat <<EOF | sudo tee /etc/crictl.yaml
+cat << EOF | sudo tee /etc/crictl.yaml
 runtime-endpoint: unix:///run/containerd/containerd.sock
 EOF
 
@@ -436,8 +436,8 @@ Generate new cert:
 
 ```bash
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
--keyout key.pem -out cert.pem \
--subj /C=CZ/ST=Czech/L=Prague/O=IT/OU=DevOps/CN=my-secure-ingress.k8s.cluster.com
+  -keyout key.pem -out cert.pem \
+  -subj /C=CZ/ST=Czech/L=Prague/O=IT/OU=DevOps/CN=my-secure-ingress.k8s.cluster.com
 ```
 
 Create k8s secret:
@@ -1360,7 +1360,8 @@ kernel.hostname = attacker
 
 * [Pod Security Policies](https://kubernetes.io/docs/concepts/policy/pod-security-policy/)
 
-PodSecurityPolicy is deprecated ([PodSecurityPolicy Deprecation: Past, Present, and Future](https://kubernetes.io/blog/2021/04/06/podsecuritypolicy-deprecation-past-present-and-future/))
+PodSecurityPolicy is deprecated
+([PodSecurityPolicy Deprecation: Past, Present, and Future](https://kubernetes.io/blog/2021/04/06/podsecuritypolicy-deprecation-past-present-and-future/))
 and your should use [Kyverno](https://github.com/kyverno/kyverno/) or [OPA/Gatekeeper](https://github.com/open-policy-agent/gatekeeper/)
 instead.
 
@@ -1684,7 +1685,7 @@ kubectl get pods -A --no-headers -o=custom-columns='DATA:spec.containers[*].imag
 List all container images which have `CRITICAL` vulnerability:
 
 ```bash
-while read -r CONTAINER_IMAGE ; do
+while read -r CONTAINER_IMAGE; do
   trivy image --severity CRITICAL "${CONTAINER_IMAGE}"
 done < <(kubectl get pods -A --no-headers -o=custom-columns='DATA:spec.containers[*].image')
 ```
