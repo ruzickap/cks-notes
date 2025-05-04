@@ -1,0 +1,36 @@
+---
+name: stale
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: 9 9 * * *
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@5bef64f19d7facfb25b37b414482c7164d639639 # v9.1.0
+        with:
+          # keep-sorted start
+          close-issue-message: |
+            This issue has not seen any activity since it was marked stale.
+            Closing.
+          close-pr-message: |
+            This pull request has not seen any activity since it was marked stale.
+            Closing.
+          exempt-issue-labels: good-first-issue,need-help,no-stale,pinned,security
+          exempt-pr-labels: "autorelease: pending,good-first-issue,need-help,no-stale,pinned,security"
+          stale-issue-label: stale
+          stale-issue-message: |
+            This issue is stale because it has been open 60 days with no activity.
+            Remove stale label or comment or this will be closed in 7 days
+          stale-pr-label: stale
+          stale-pr-message: |
+            This PR is stale because it has been open 60 days with no activity.
+            Remove stale label or comment or this will be closed in 7 days.
+          # keep-sorted end
