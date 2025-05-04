@@ -269,7 +269,7 @@ kubectl exec backend -- curl -s database.database.svc.cluster.local
 
 ## Kubernetes Dashboard
 
-* [Dashboard arguments](https://github.com/kubernetes/dashboard/blob/master/docs/common/dashboard-arguments.md)
+* [Dashboard arguments](https://github.com/kubernetes/dashboard/blob/0dc322e21320f8678271a117812f3922f4965e23/docs/common/dashboard-arguments.md)
 
 > Do not do this on your production :-)
 
@@ -850,8 +850,10 @@ You are running outdated k8s version 1.19:
 
 ```console
 # vagrant ssh kubemaster
+kubectl get nodes
+```
 
-$ kubectl get nodes
+```console
 NAME         STATUS   ROLES    AGE   VERSION
 kubemaster   Ready    master   22m   v1.19.0
 kubenode01   Ready    <none>   22m   v1.19.0
@@ -866,7 +868,10 @@ kubectl drain kubemaster --ignore-daemonsets
 The master node is drained:
 
 ```bash
-$ kubectl get nodes
+kubectl get nodes
+```
+
+```console
 NAME         STATUS                     ROLES    AGE   VERSION
 kubemaster   Ready,SchedulingDisabled   master   25m   v1.19.0
 kubenode01   Ready                      <none>   24m   v1.19.0
