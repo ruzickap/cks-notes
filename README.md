@@ -929,8 +929,11 @@ sudo kubeadm upgrade apply v1.20.10
 
 Check the nodes:
 
+```bash
+kubectl get nodes
+```
+
 ```console
-$ kubectl get nodes
 NAME         STATUS                     ROLES                  AGE   VERSION
 kubemaster   Ready,SchedulingDisabled   control-plane,master   42m   v1.20.10
 kubenode01   Ready                      <none>                 42m   v1.19.0
@@ -944,10 +947,12 @@ kubectl uncordon kubemaster
 
 ### Upgrade worker node
 
-```console
+```bash
 # vagrant ssh kubemaster
+kubectl get nodes
+```
 
-$ kubectl get nodes
+```console
 NAME         STATUS   ROLES                  AGE   VERSION
 kubemaster   Ready    control-plane,master   43m   v1.20.10
 kubenode01   Ready    <none>                 43m   v1.19.0
@@ -962,7 +967,10 @@ kubectl drain kubenode01 --ignore-daemonsets
 The worker node is drained:
 
 ```bash
-$ kubectl get nodes
+kubectl get nodes
+```
+
+```console
 NAME         STATUS                     ROLES                  AGE   VERSION
 kubemaster   Ready                      control-plane,master   48m   v1.20.10
 kubenode01   Ready,SchedulingDisabled   <none>                 47m   v1.19.0
@@ -983,11 +991,18 @@ sudo apt-get install -y --allow-change-held-packages kubelet=${KUBE_VERSION}-00 
 
 Check the nodes:
 
+```bash
+kubectl uncordon kubenode01
+```
+
 ```console
-$ kubectl uncordon kubenode01
 node/kubenode01 uncordoned
 
-$ kubectl get nodes
+```bash
+kubectl get nodes
+```
+
+```console
 NAME         STATUS                     ROLES                  AGE   VERSION
 kubemaster   Ready                      control-plane,master   53m   v1.20.10
 kubenode01   Ready,SchedulingDisabled   <none>                 52m   v1.20.10
