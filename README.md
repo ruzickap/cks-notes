@@ -36,13 +36,13 @@ sudo apt-get update
 sudo apt-get install -y apparmor-utils apt-transport-https ca-certificates \
   containerd curl docker.io etcd-client jq lsb-release mc strace tree
 
-cat << EOF | sudo tee /etc/modules-load.d/containerd.conf
+cat <<EOF | sudo tee /etc/modules-load.d/containerd.conf
 overlay
 br_netfilter
 EOF
 sudo modprobe overlay
 sudo modprobe br_netfilter
-cat << EOF | sudo tee /etc/sysctl.d/k8s.conf
+cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
 net.bridge.bridge-nf-call-iptables  = 1
 net.ipv4.ip_forward                 = 1
 net.bridge.bridge-nf-call-ip6tables = 1
@@ -56,7 +56,7 @@ containerd config default | \
   sudo tee /etc/containerd/config.toml
 sudo systemctl restart containerd
 
-cat << EOF | sudo tee /etc/crictl.yaml
+cat <<EOF | sudo tee /etc/crictl.yaml
 runtime-endpoint: unix:///run/containerd/containerd.sock
 EOF
 
@@ -66,10 +66,13 @@ sudo systemctl daemon-reload
 sudo systemctl enable containerd docker
 sudo systemctl restart containerd
 
-sudo apt-get install -y kubelet=${KUBE_VERSION}-00 kubeadm=${KUBE_VERSION}-00 kubectl=${KUBE_VERSION}-00
+sudo apt-get install -y \
+  kubelet="${KUBE_VERSION}"-00 \
+  kubeadm="${KUBE_VERSION}"-00 \
+  kubectl="${KUBE_VERSION}"-00
 sudo apt-mark hold kubelet kubeadm kubectl
 
-cat >> ~/.bashrc << EOF
+cat >>~/.bashrc <<EOF
 source <(kubectl completion bash)
 alias k=kubectl
 complete -F __start_kubectl k
@@ -81,18 +84,20 @@ Execute the following commands on the **master** node (`kubemaster`) only:
 ```bash
 # vagrant ssh kubemaster
 
-sudo kubeadm init --cri-socket /run/containerd/containerd.sock \
-  --kubernetes-version=${KUBE_VERSION} \
+sudo kubeadm init \
+  --cri-socket /run/containerd/containerd.sock \
+  --kubernetes-version="${KUBE_VERSION}" \
   --pod-network-cidr=10.224.0.0/16 \
-  --apiserver-advertise-address=192.168.56.2 --skip-token-print
+  --apiserver-advertise-address=192.168.56.2 \
+  --skip-token-print
 
 mkdir -p "${HOME}/.kube"
 sudo cp -i /etc/kubernetes/admin.conf "${HOME}/.kube/config"
 sudo chown "$(id -u):$(id -g)" "${HOME}/.kube/config"
 
-curl -LO https://github.com/cilium/cilium-cli/releases/latest/download/cilium-linux-amd64.tar.gz
-sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
-rm cilium-linux-amd64.tar.gz
+curl -LO https://github.com/cilium/cilium-cli/releases/latest/download/cilium-linux-amd64.tar.gz &&
+  sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin &&
+  rm cilium-linux-amd64.tar.gz
 cilium install
 
 kubeadm token create --print-join-command --ttl 0
@@ -641,9 +646,11 @@ Save signed Jane's certificate to file and create context:
 ```bash
 kubectl get certificatesigningrequest jane \
   -o=jsonpath='{.status.certificate}' | base64 -d > jane.crt
-kubectl config set-credentials jane --client-key=jane.key \
+kubectl config set-credentials jane \
+  --client-key=jane.key \
   --client-certificate=jane.crt --embed-certs=true
-kubectl config set-context jane --user=jane --cluster=kubernetes
+kubectl config set-context jane \
+  --user=jane --cluster=kubernetes
 ```
 
 ```console
@@ -790,14 +797,11 @@ Extract the following data from your kubeconfig file:
 
 ```bash
 kubectl config view --raw \
-  -o jsonpath='{.clusters[?(@.name=="kubernetes")].cluster.certificate-authority-data}' \
-  | base64 -d > ca
+  -o jsonpath='{.clusters[?(@.name=="kubernetes")].cluster.certificate-authority-data}' | base64 -d > ca
 kubectl config view --raw \
-  -o jsonpath='{.users[?(@.name=="kubernetes-admin")].user.client-certificate-data}' \
-  | base64 -d > crt
+  -o jsonpath='{.users[?(@.name=="kubernetes-admin")].user.client-certificate-data}' | base64 -d > crt
 kubectl config view --raw \
-  -o jsonpath='{.users[?(@.name=="kubernetes-admin")].user.client-key-data}' \
-  | base64 -d > key
+  -o jsonpath='{.users[?(@.name=="kubernetes-admin")].user.client-key-data}' | base64 -d > key
 SERVER=$(kubectl config view --raw \
   -o jsonpath='{.clusters[?(@.name=="kubernetes")].cluster.server}')
 echo "${SERVER}"
@@ -1818,7 +1822,9 @@ Find the `PID` for `etcd`:
 
 ```console
 $ ps -elf | grep etcd
-4 S root      6900  6529  1  80   0 - 2653294 -    Oct12 ?        00:19:39 etcd --advertise-client-urls=https://192.168.56.2:2379 --cert-file=/etc/kubernetes/pki/
+4 S root      6900  6529  1  80   0 - 2653294 -    Oct12 ?        00:19:39 etcd \
+  --advertise-client-urls=https://192.168.56.2:2379 \
+  --cert-file=/etc/kubernetes/pki/
 ```
 
 Attach strace to the `etcd` process:
