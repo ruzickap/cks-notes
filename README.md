@@ -1,10 +1,10 @@
 # CKS Notes
 
-Handy notes can be also find here: [https://github.com/dragon7-fc/misc/tree/1385c4a2e4719b9aa914c3b274c2877f7305d11e](https://github.com/dragon7-fc/misc/tree/1385c4a2e4719b9aa914c3b274c2877f7305d11e)
+Handy notes can also be found here: [https://github.com/dragon7-fc/misc/tree/1385c4a2e4719b9aa914c3b274c2877f7305d11e](https://github.com/dragon7-fc/misc/tree/1385c4a2e4719b9aa914c3b274c2877f7305d11e)
 
 ## Test k8s cluster using Vagrant
 
-Prepare the test environment - Kubernetes cluster with 1 master node and one
+Prepare the test environment – a Kubernetes cluster with one master node and one
 worker node using Vagrant + VirtualBox:
 
 ```bash
@@ -16,9 +16,9 @@ sed -i 's/NUM_WORKER_NODE = 2/NUM_WORKER_NODE = 1/' Vagrantfile
 vagrant up
 ```
 
-The installation steps are taken from: [install_master.sh](https://github.com/killer-sh/cks-course-environment/blob/master/cluster-setup/latest/install_master.sh)
+The installation steps are based on: [install_master.sh](https://github.com/killer-sh/cks-course-environment/blob/master/cluster-setup/latest/install_master.sh)
 
-Run on both k8s nodes (`kubemaster`, `kubenode01`):
+Execute the following commands on both Kubernetes nodes (`kubemaster` and `kubenode01`):
 
 ```bash
 # vagrant ssh kubemaster
@@ -26,11 +26,15 @@ Run on both k8s nodes (`kubemaster`, `kubenode01`):
 
 KUBE_VERSION=1.21.5
 
-sudo curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
-echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+sudo curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg \
+  https://packages.cloud.google.com/apt/doc/apt-key.gpg
+echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] \
+  https://apt.kubernetes.io/ kubernetes-xenial main" |
+  sudo tee /etc/apt/sources.list.d/kubernetes.list
 
 sudo apt-get update
-sudo apt-get install -y apparmor-utils apt-transport-https ca-certificates containerd curl docker.io etcd-client jq lsb-release mc strace tree
+sudo apt-get install -y apparmor-utils apt-transport-https ca-certificates \
+  containerd curl docker.io etcd-client jq lsb-release mc strace tree
 
 cat << EOF | sudo tee /etc/modules-load.d/containerd.conf
 overlay
@@ -47,7 +51,9 @@ EOF
 sudo sysctl --system
 
 sudo mkdir -p /etc/containerd
-containerd config default | sed 's/SystemdCgroup = false/SystemdCgroup = true/' | sudo tee /etc/containerd/config.toml
+containerd config default |
+  sed 's/SystemdCgroup = false/SystemdCgroup = true/' |
+  sudo tee /etc/containerd/config.toml
 sudo systemctl restart containerd
 
 cat << EOF | sudo tee /etc/crictl.yaml
@@ -60,7 +66,10 @@ sudo systemctl daemon-reload
 sudo systemctl enable containerd docker
 sudo systemctl restart containerd
 
-sudo apt-get install -y kubelet=${KUBE_VERSION}-00 kubeadm=${KUBE_VERSION}-00 kubectl=${KUBE_VERSION}-00
+sudo apt-get install -y \
+  kubelet="${KUBE_VERSION}-00" \
+  kubeadm="${KUBE_VERSION}-00" \
+  kubectl="${KUBE_VERSION}-00"
 sudo apt-mark hold kubelet kubeadm kubectl
 
 cat >> ~/.bashrc << EOF
@@ -70,30 +79,38 @@ complete -F __start_kubectl k
 EOF
 ```
 
-Run on **master** `kubemaster` node only:
+Execute the following commands on the **master** node (`kubemaster`) only:
 
 ```bash
 # vagrant ssh kubemaster
 
-sudo kubeadm init --cri-socket /run/containerd/containerd.sock --kubernetes-version=${KUBE_VERSION} --pod-network-cidr=10.224.0.0/16 --apiserver-advertise-address=192.168.56.2 --skip-token-print
+sudo kubeadm init \
+  --cri-socket /run/containerd/containerd.sock \
+  --kubernetes-version="${KUBE_VERSION}" \
+  --pod-network-cidr=10.224.0.0/16 \
+  --apiserver-advertise-address=192.168.56.2 \
+  --skip-token-print
 
 mkdir -p "${HOME}/.kube"
 sudo cp -i /etc/kubernetes/admin.conf "${HOME}/.kube/config"
 sudo chown "$(id -u):$(id -g)" "${HOME}/.kube/config"
 
-curl -LO https://github.com/cilium/cilium-cli/releases/latest/download/cilium-linux-amd64.tar.gz
-sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
-rm cilium-linux-amd64.tar.gz
+curl -LO https://github.com/cilium/cilium-cli/releases/latest/download/cilium-linux-amd64.tar.gz &&
+  sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin &&
+  rm cilium-linux-amd64.tar.gz
 cilium install
 
 kubeadm token create --print-join-command --ttl 0
 ```
 
-Run on **worker** `kubenode01` node only:
+Execute the following commands on the **worker** node (`kubenode01`) only:
 
 ```bash
 # vagrant ssh kubenode01
-sudo kubeadm join --cri-socket /run/containerd/containerd.sock --kubernetes-version=${KUBE_VERSION} 192.168.56.2:6443 --token i0sn6a.jnvsbw73yi03nre7 --discovery-token-ca-cert-hash sha256:ffa3c5c3cd8ee55bd9497e8d6d9556d3bcef7b0879f871a088819f232c4673e0
+sudo kubeadm join --cri-socket /run/containerd/containerd.sock \
+  --kubernetes-version=${KUBE_VERSION} 192.168.56.2:6443 \
+  --token i0sn6a.jnvsbw73yi03nre7 \
+  --discovery-token-ca-cert-hash sha256:ffa3c5c3cd8ee55bd9497e8d6d9556d3bcef7b0879f871a088819f232c4673e0
 ```
 
 ## Kubernetes certificates
@@ -260,7 +277,7 @@ spec:
 EOF
 ```
 
-The following command will work, because there is no NetworkPolicies in the
+The following command will work because there are no NetworkPolicies in the
 database namespace.
 
 ```bash
@@ -271,7 +288,7 @@ kubectl exec backend -- curl -s database.database.svc.cluster.local
 
 * [Dashboard arguments](https://github.com/kubernetes/dashboard/blob/0dc322e21320f8678271a117812f3922f4965e23/docs/common/dashboard-arguments.md)
 
-> Do not do this on your production :-)
+> Do not do this in your production environment.
 
 Install:
 
@@ -315,7 +332,7 @@ spec:
 ...
 ```
 
-You should be able to reach Kubernetes Dashboard by going to [http://192.168.56.2:32645](http://192.168.56.2:32645):
+You should be able to access the Kubernetes Dashboard at [http://192.168.56.2:32645](http://192.168.56.2:32645):
 
 ```bash
 curl -k http://192.168.56.2:32645
@@ -326,7 +343,8 @@ curl -k http://192.168.56.2:32645
 Install `ingress-nginx` and delete "NetworkPolicies" + "Services" + "Pods":
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.0.3/deploy/static/provider/baremetal/deploy.yaml
+kubectl apply -f \
+  https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.0.3/deploy/static/provider/baremetal/deploy.yaml
 kubectl delete networkpolicies,service,pods --all
 ```
 
@@ -342,7 +360,8 @@ service/ingress-nginx-controller             NodePort    10.96.253.251   <none> 
 service/ingress-nginx-controller-admission   ClusterIP   10.100.6.131    <none>        443/TCP                      13s
 ```
 
-Verify the `ingress-nginx` is up by running (you will get "404"):
+Verify that `ingress-nginx` is running by executing the following command
+(a 404 error is expected at this stage):
 
 ```bash
 curl -kv http://192.168.56.2:32550 https://192.168.56.2:31606
@@ -351,8 +370,10 @@ curl -kv http://192.168.56.2:32550 https://192.168.56.2:31606
 Start two applications:
 
 ```bash
-kubectl run app1 --image=ghcr.io/stefanprodan/podinfo:6.0.0 --port=9898 --expose=true --env="PODINFO_UI_MESSAGE=app1"
-kubectl run app2 --image=ghcr.io/stefanprodan/podinfo:6.0.0 --port=9898 --expose=true --env="PODINFO_UI_MESSAGE=app2"
+kubectl run app1 --image=ghcr.io/stefanprodan/podinfo:6.0.0 --port=9898 \
+  --expose=true --env="PODINFO_UI_MESSAGE=app1"
+kubectl run app2 --image=ghcr.io/stefanprodan/podinfo:6.0.0 --port=9898 \
+  --expose=true --env="PODINFO_UI_MESSAGE=app2"
 ```
 
 ```bash
@@ -385,8 +406,8 @@ spec:
 EOF
 ```
 
-You should be able to reach the ingress and the services behind which should
-give different response:
+You should be able to reach the Ingress and the backend services, which will
+provide different responses:
 
 ```console
 $ curl -sk https://192.168.56.2:31606/app1 | jq
@@ -422,7 +443,7 @@ $ curl -sk https://192.168.56.2:31606/app2 | jq
 
 ### Ingress - certificate
 
-There is self signed certificate used by Ingress:
+The Ingress controller uses a self-signed certificate by default:
 
 ```console
 $ curl -sk https://192.168.56.2:31606/app2
@@ -437,7 +458,7 @@ Generate new cert:
 ```bash
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
   -keyout key.pem -out cert.pem \
-  -subj /C=CZ/ST=Czech/L=Prague/O=IT/OU=DevOps/CN=my-secure-ingress.k8s.cluster.com
+  -subj "/C=CZ/ST=Czech/L=Prague/O=IT/OU=DevOps/CN=my-secure-ingress.k8s.cluster.com"
 ```
 
 Create k8s secret:
@@ -500,8 +521,14 @@ $ curl -kv https://my-secure-ingress.k8s.cluster.com:31606/app2 --resolve my-sec
 * [kube-bench](https://github.com/aquasecurity/kube-bench)
 
 ```bash
-docker run --pid=host -v /etc:/etc:ro -v /var:/var:ro -v "$(which kubectl):/usr/local/mount-from-host/bin/kubectl" -v ~/.kube:/.kube -e KUBECONFIG=/.kube/config -t aquasec/kube-bench:latest master
-docker run --pid=host -v /etc:/etc:ro -v /var:/var:ro -v "$(which kubectl):/usr/local/mount-from-host/bin/kubectl" -v ~/.kube:/.kube -e KUBECONFIG=/.kube/config -t aquasec/kube-bench:latest node
+docker run --pid=host -v /etc:/etc:ro -v /var:/var:ro \
+  -v "$(which kubectl):/usr/local/mount-from-host/bin/kubectl" \
+  -v ~/.kube:/.kube -e KUBECONFIG=/.kube/config \
+  -t aquasec/kube-bench:latest master
+docker run --pid=host -v /etc:/etc:ro -v /var:/var:ro \
+  -v "$(which kubectl):/usr/local/mount-from-host/bin/kubectl" \
+  -v ~/.kube:/.kube -e KUBECONFIG=/.kube/config \
+  -t aquasec/kube-bench:latest node
 ```
 
 You can install it locally:
@@ -513,7 +540,7 @@ apt install ./kube-bench_0.6.5_linux_amd64.deb
 
 ## Hashes
 
-* Get kubernetes binaries from: [Kubernetes v1.22.2](https://github.com/kubernetes/kubernetes/releases/tag/v1.22.2)
+* Download Kubernetes binaries from: [Kubernetes v1.22.2](https://github.com/kubernetes/kubernetes/releases/tag/v1.22.2)
 
 * Go to [CHANGELOG](https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.22.md)
 
@@ -581,7 +608,7 @@ Create Jane's certificate:
 touch ~/.rnd
 openssl genrsa -out jane.key 2048
 openssl req -new -key jane.key -out jane.csr \
-  -subj /C=CZ/ST=Czech/L=Prague/O=IT/OU=DevOps/CN=jane
+  -subj "/C=CZ/ST=Czech/L=Prague/O=IT/OU=DevOps/CN=jane"
 ```
 
 Create `CertificateSigningRequest`:
@@ -617,9 +644,13 @@ jane   95s   kubernetes.io/kube-apiserver-client   kubernetes-admin   <none>    
 Save signed Jane's certificate to file and create context:
 
 ```bash
-kubectl get certificatesigningrequest jane -o=jsonpath='{.status.certificate}' | base64 -d > jane.crt
-kubectl config set-credentials jane --client-key=jane.key --client-certificate=jane.crt --embed-certs=true
-kubectl config set-context jane --user=jane --cluster=kubernetes
+kubectl get certificatesigningrequest jane \
+  -o=jsonpath='{.status.certificate}' | base64 -d > jane.crt
+kubectl config set-credentials jane \
+  --client-key=jane.key \
+  --client-certificate=jane.crt --embed-certs=true
+kubectl config set-context jane \
+  --user=jane --cluster=kubernetes
 ```
 
 ```console
@@ -641,7 +672,7 @@ default-token-g7sgk   kubernetes.io/service-account-token   3      3h51m
 
 ## Service Accounts
 
-It is a good practice for application to have it's own ServiceAccount.
+It is good practice for an application to have its own ServiceAccount.
 
 ```console
 $ kubectl get serviceaccount,secrets
@@ -712,8 +743,8 @@ automountServiceAccountToken: false
 
 ## API Access
 
-By default the k8s API accepts the "anonymous requests". Access is deied for
-`system:anonymous` user:
+By default, the Kubernetes API accepts anonymous requests. Access is denied for
+the `system:anonymous` user:
 
 ```console
 $ curl -k https://localhost:6443
@@ -757,22 +788,26 @@ $ curl -k https://localhost:6443
 }
 ```
 
-Put it back, because `kube-apiserver` needs anonymous API requests for it's own
-livenes probes.
+Revert this change, because `kube-apiserver` requires anonymous API requests for
+its own liveness probes.
 
 ### Manual API request using curl
 
-Extract data from "kubeconfig" file:
+Extract the following data from your kubeconfig file:
 
 ```bash
-kubectl config view --raw -o jsonpath='{.clusters[?(@.name=="kubernetes")].cluster.certificate-authority-data}' | base64 -d > ca
-kubectl config view --raw -o jsonpath='{.users[?(@.name=="kubernetes-admin")].user.client-certificate-data}' | base64 -d > crt
-kubectl config view --raw -o jsonpath='{.users[?(@.name=="kubernetes-admin")].user.client-key-data}' | base64 -d > key
-SERVER=$(kubectl config view --raw -o jsonpath='{.clusters[?(@.name=="kubernetes")].cluster.server}')
+kubectl config view --raw \
+  -o jsonpath='{.clusters[?(@.name=="kubernetes")].cluster.certificate-authority-data}' | base64 -d > ca
+kubectl config view --raw \
+  -o jsonpath='{.users[?(@.name=="kubernetes-admin")].user.client-certificate-data}' | base64 -d > crt
+kubectl config view --raw \
+  -o jsonpath='{.users[?(@.name=="kubernetes-admin")].user.client-key-data}' | base64 -d > key
+SERVER=$(kubectl config view --raw \
+  -o jsonpath='{.clusters[?(@.name=="kubernetes")].cluster.server}')
 echo "${SERVER}"
 ```
 
-Access the k8s cluster using certificates and ca:
+Access the Kubernetes cluster using the extracted certificates and CA:
 
 ```console
 $ curl -s "${SERVER}" --cacert ca --cert crt --key key | jq
@@ -785,12 +820,12 @@ $ curl -s "${SERVER}" --cacert ca --cert crt --key key | jq
 }
 ```
 
-### Eneble k8s API for external access
+### Enable k8s API for external access
 
 * [Controlling Access to the Kubernetes API](https://kubernetes.io/docs/concepts/security/controlling-access/)
 
-Verify which IP addresses are allowed to connect to k8s API. You should see your
-external IP there `192.168.56.2`:
+Verify which IP addresses are allowed to connect to the Kubernetes API. Your
+external IP address (`192.168.56.2`) should be listed:
 
 ```console
 $ openssl x509 -in /etc/kubernetes/pki/apiserver.crt -text
@@ -822,13 +857,14 @@ NAME         TYPE       CLUSTER-IP   EXTERNAL-IP   PORT(S)         AGE
 kubernetes   NodePort   10.96.0.1    <none>        443:32689/TCP   37h
 ```
 
-Copy the kubeconfig to the machine where you are running the vagrant:
+Copy the kubeconfig file to the machine where Vagrant is running:
 
 ```bash
 vagrant ssh kubemaster -c "kubectl config view --raw" > local.conf
 ```
 
-Replace the server parameter with the external IP and `NodePort` port:
+In the copied kubeconfig file, replace the `server` parameter with the external
+IP address and NodePort:
 
 ```bash
 sed -i 's@\(.*server: https:\).*@\1//192.168.56.2:32689@' local.conf
@@ -846,7 +882,7 @@ kubectl --kubeconfig=local.conf get ns
 
 ### Upgrade master node
 
-You are running outdated k8s version 1.19:
+The cluster is currently running Kubernetes version 1.19:
 
 ```console
 # vagrant ssh kubemaster
@@ -865,7 +901,7 @@ Drain the master node:
 kubectl drain kubemaster --ignore-daemonsets
 ```
 
-The master node is drained:
+The master node is now drained:
 
 ```bash
 kubectl get nodes
@@ -877,7 +913,7 @@ kubemaster   Ready,SchedulingDisabled   master   25m   v1.19.0
 kubenode01   Ready                      <none>   24m   v1.19.0
 ```
 
-Check avaiable k8s versions (next minor version is 1.20):
+Check available Kubernetes versions (the next minor version is 1.20):
 
 ```console
 $ apt-cache show kubeadm | grep '1.20'
@@ -892,7 +928,10 @@ Upgrade k8s cluster components:
 
 ```bash
 KUBE_VERSION=1.20.10
-sudo apt-get install -y --allow-change-held-packages kubelet=${KUBE_VERSION}-00 kubeadm=${KUBE_VERSION}-00 kubectl=${KUBE_VERSION}-00
+sudo apt-get install -y --allow-change-held-packages \
+  kubelet="${KUBE_VERSION}-00" \
+  kubeadm="${KUBE_VERSION}-00" \
+  kubectl="${KUBE_VERSION}-00"
 ```
 
 Check the "upgrade plan":
@@ -964,7 +1003,7 @@ Drain the worker node:
 kubectl drain kubenode01 --ignore-daemonsets
 ```
 
-The worker node is drained:
+The worker node is now drained:
 
 ```bash
 kubectl get nodes
@@ -982,11 +1021,14 @@ Upgrade k8s cluster components:
 # vagrant ssh kubenode01
 
 KUBE_VERSION=1.20.10
-sudo apt-get install -y --allow-change-held-packages kubeadm=${KUBE_VERSION}-00
+sudo apt-get install -y --allow-change-held-packages \
+  kubeadm="${KUBE_VERSION}-00"
 
 sudo kubeadm upgrade node
 
-sudo apt-get install -y --allow-change-held-packages kubelet=${KUBE_VERSION}-00 kubectl=${KUBE_VERSION}-00
+sudo apt-get install -y --allow-change-held-packages \
+  kubelet="${KUBE_VERSION}-00" \
+  kubectl="${KUBE_VERSION}-00"
 ```
 
 Check the nodes:
@@ -997,6 +1039,7 @@ kubectl uncordon kubenode01
 
 ```console
 node/kubenode01 uncordoned
+```
 
 ```bash
 kubectl get nodes
@@ -1014,14 +1057,14 @@ kubenode01   Ready,SchedulingDisabled   <none>                 52m   v1.20.10
 
 ### Create pod with secrets
 
-Create secrets:
+Create Secrets:
 
 ```bash
 kubectl create secret generic secret1 --from-literal username=admin1 --from-literal password=admin123
 kubectl create secret generic secret2 --from-literal username=admin2 --from-literal password=admin321
 ```
 
-Create pod which will use the secrets:
+Create a Pod that uses the Secrets:
 
 ```bash
 kubectl apply -f - << EOF
@@ -1055,7 +1098,7 @@ spec:
 EOF
 ```
 
-Check the secrets inside the containers:
+Verify the Secrets within the containers:
 
 ```console
 $ kubectl exec -it mypod -- bash -xc 'ls /secret1 ; echo $(cat /secret1/username); echo $(cat /secret1/password)'
@@ -1085,7 +1128,7 @@ CONTAINER ID        IMAGE               CREATED             STATE               
 ...
 ```
 
-Check the container details where you can see the unencrypted environment
+Inspect the container details, where you will find the unencrypted environment
 variables:
 
 ```console
@@ -1111,7 +1154,7 @@ $ sudo crictl inspect 879e08f431dd5
 ...
 ```
 
-Let's check the values which are being mounted using the volumes:
+Next, let's examine the values mounted via volumes:
 
 ```console
 $ sudo crictl inspect 879e08f431dd5 | jq '.info.pid'
@@ -1125,7 +1168,7 @@ lrwxrwxrwx 1 root root 15 Oct 11 11:02 username -> ..data/username
 
 ### ETCD
 
-Find ETCD details:
+Find etcd connection details:
 
 ```console
 # cat /etc/kubernetes/manifests/kube-apiserver.yaml | grep etcd
@@ -1176,7 +1219,7 @@ resources:
 EOF
 ```
 
-Change API server to use the encryption:
+Modify the API server configuration to use encryption:
 
 ```console
 # vi /etc/kubernetes/manifests/kube-apiserver.yaml
@@ -1199,20 +1242,20 @@ spec:
     name: etcd
 ```
 
-Create test secret which should be encrypted in ETCD:
+Create a test Secret, which should now be encrypted in etcd:
 
 ```bash
 kubectl create secret generic secret3 --from-literal username=admin3 --from-literal password=admin567
 ```
 
-Read the secret from ETCD - it should be encrypted:
+Read the Secret from etcd; it should be encrypted:
 
 ```console
 ETCDCTL_API=3 etcdctl get /registry/secrets/default/secret3 \
   --cert=/etc/kubernetes/pki/apiserver-etcd-client.crt \
   --key=/etc/kubernetes/pki/apiserver-etcd-client.key \
-  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
-  | hexdump -C
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt | \
+  hexdump -C
 00000000  2f 72 65 67 69 73 74 72  79 2f 73 65 63 72 65 74  |/registry/secret|
 00000010  73 2f 64 65 66 61 75 6c  74 2f 73 65 63 72 65 74  |s/default/secret|
 00000020  33 0a 6b 38 73 3a 65 6e  63 3a 61 65 73 63 62 63  |3.k8s:enc:aescbc|
@@ -1243,7 +1286,7 @@ scheduling:
 EOF
 ```
 
-Crate pod:
+Create Pod:
 
 ```bash
 kubectl apply -f - << EOF
@@ -1270,7 +1313,8 @@ EOF
 Create busybox pod:
 
 ```bash
-kubectl run busybox --image=busybox --command --dry-run=client -o yaml -- sh -c 'sleep 1d'
+kubectl run busybox --image=busybox --command \
+  --dry-run=client -o yaml -- sh -c 'sleep 1d'
 ```
 
 ```bash
@@ -1293,7 +1337,7 @@ spec:
 EOF
 ```
 
-The pod is running as "root":
+The Pod is running as the root user:
 
 ```console
 $ kubectl exec -it busybox -- sh -c 'set -x ; id ; touch /test123 ; ls -l /test123'
@@ -1340,11 +1384,11 @@ uid=1000 gid=3000 groups=2000
 -rw-r--r--    1 1000     3000             0 Oct 12 05:19 /tmp/test123
 ```
 
-### Priviledged containers and PrivilegeEscalations
+### Privileged containers and PrivilegeEscalations
 
 * [Privileged](https://kubernetes.io/docs/concepts/policy/pod-security-policy/#privileged)
 
-Container "root" user is mapped to the host "root" user.
+The container's root user is mapped to the host's root user.
 
 ```bash
 kubectl apply --force=true --grace-period=1 -f - << EOF
@@ -1382,12 +1426,13 @@ kernel.hostname = attacker
 
 PodSecurityPolicy is deprecated
 ([PodSecurityPolicy Deprecation: Past, Present, and Future](https://kubernetes.io/blog/2021/04/06/podsecuritypolicy-deprecation-past-present-and-future/))
-and your should use [Kyverno](https://github.com/kyverno/kyverno/) or [OPA/Gatekeeper](https://github.com/open-policy-agent/gatekeeper/)
+and you should use [Kyverno](https://github.com/kyverno/kyverno/) or [OPA/Gatekeeper](https://github.com/open-policy-agent/gatekeeper/)
 instead.
 
 * [Create a policy and a pod](https://kubernetes.io/docs/concepts/policy/pod-security-policy/#create-a-policy-and-a-pod)
 
-Create new namespace and pod which stores the date in `/tmp/date` on the host:
+Create a new namespace and a Pod that stores the current date in `/tmp/date` on
+the host node:
 
 ```bash
 kubectl create namespace my-namespace
@@ -1422,10 +1467,12 @@ spec:
           path: /tmp
 EOF
 
-kubectl exec -it -n my-namespace "$(kubectl get pod -n my-namespace -l app=my-busybox --no-headers -o custom-columns=':metadata.name')" -- cat /tmp/date
+kubectl exec -it -n my-namespace \
+  "$(kubectl get pod -n my-namespace -l app=my-busybox --no-headers \
+    -o custom-columns=':metadata.name')" -- cat /tmp/date
 ```
 
-Enable admission Plugin PodSecurityPolicy in the API server:
+Enable the PodSecurityPolicy admission plugin in the API server:
 
 ```console
 sudo vi /etc/kubernetes/manifests/kube-apiserver.yaml
@@ -1434,8 +1481,8 @@ sudo vi /etc/kubernetes/manifests/kube-apiserver.yaml
 ...
 ```
 
-Create psp which doesn't allow `allowPrivilegeEscalation` or `privileged` and
-allows usage of `HostPaths` for `/var/tmp` only:
+Create a PodSecurityPolicy (PSP) that disallows `allowPrivilegeEscalation` and
+`privileged` mode, and only allows `HostPaths` for `/var/tmp`:
 
 ```bash
 kubectl apply -f - << EOF
@@ -1464,15 +1511,19 @@ spec:
 EOF
 ```
 
-Create `Role` and `RoleBinding` which allows to use "podsecuritypolicies":
+Create a `Role` and `RoleBinding` that grant permission to use PodSecurityPolicies:
 
 ```bash
-kubectl create clusterrole psp-access --verb=use --resource=podsecuritypolicies
-kubectl create clusterrolebinding psp-access --clusterrole=psp-access --group=system:serviceaccounts:my-namespace --namespace=my-namespace
+kubectl create clusterrole psp-access --verb=use \
+  --resource=podsecuritypolicies
+kubectl create clusterrolebinding psp-access \
+  --clusterrole=psp-access \
+  --group=system:serviceaccounts:my-namespace --namespace=my-namespace
 ```
 
-All pods in `my-namespace` are allowed to use `HostPaths` in `/var/tmp/`.
-If I restart the pod I got:
+All Pods in the `my-namespace` namespace are now restricted to using
+`HostPaths` within `/var/tmp/`. If the existing Pod is restarted, you will
+observe the following:
 
 ```console
 $ kubectl delete pod -n my-namespace --all
@@ -1485,7 +1536,7 @@ Events:
   Warning  FailedCreate      4m5s (x17 over 4m46s)  replicaset-controller  Error creating: pods "my-busybox-7d5b7688f9-" is forbidden: PodSecurityPolicy: unable to admit pod: [spec.volumes[0].hostPath.pathPrefix: Invalid value: "/tmp": is not allowed to be used]
 ```
 
-It's necessary to change the deployment to use `/var/tmp/` instead of `/tmp/`:
+It is necessary to modify the Deployment to use `/var/tmp/` instead of `/tmp/`:
 
 ```bash
 kubectl apply -f - << EOF
@@ -1527,7 +1578,8 @@ EOF
 Install Gatekeeper:
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/open-policy-agent/gatekeeper/release-3.5/deploy/gatekeeper.yaml
+kubectl apply -f \
+  https://raw.githubusercontent.com/open-policy-agent/gatekeeper/release-3.5/deploy/gatekeeper.yaml
 ```
 
 Check the CRDs:
@@ -1541,7 +1593,7 @@ constrainttemplates.templates.gatekeeper.sh          2021-10-12T10:23:31Z
 k8strustedimages.constraints.gatekeeper.sh           2021-10-12T10:41:26Z
 ```
 
-Block pod to get image from `k8s.gcr.io` container registry.
+Block Pods from using images from the `k8s.gcr.io` container registry.
 
 Create `ConstraintTemplate`:
 
@@ -1632,7 +1684,7 @@ Status:
 Events:                  <none>
 ```
 
-Delete all "Constraints" and "ConstraintTemplates":
+Delete all Constraints and ConstraintTemplates:
 
 ```bash
 kubectl delete K8sTrustedImages,ConstraintTemplates --all
@@ -1646,7 +1698,8 @@ kubectl delete K8sTrustedImages,ConstraintTemplates --all
 Install trivy:
 
 ```bash
-curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin v0.20.0
+curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh |
+  sh -s -- -b /usr/local/bin v0.20.0
 ```
 
 Check vulnerabilities:
@@ -1699,10 +1752,11 @@ Total: 4 (CRITICAL: 4)
 List all images in the cluster:
 
 ```bash
-kubectl get pods -A --no-headers -o=custom-columns='DATA:spec.containers[*].image'
+kubectl get pods -A --no-headers \
+  -o=custom-columns='DATA:spec.containers[*].image'
 ```
 
-List all container images which have `CRITICAL` vulnerability:
+List all container images that have `CRITICAL` vulnerabilities:
 
 ```bash
 while read -r CONTAINER_IMAGE; do
@@ -1770,16 +1824,18 @@ Find the `PID` for `etcd`:
 
 ```console
 $ ps -elf | grep etcd
-4 S root      6900  6529  1  80   0 - 2653294 -    Oct12 ?        00:19:39 etcd --advertise-client-urls=https://192.168.56.2:2379 --cert-file=/etc/kubernetes/pki/
+4 S root      6900  6529  1  80   0 - 2653294 -    Oct12 ?        00:19:39 etcd \
+  --advertise-client-urls=https://192.168.56.2:2379 \
+  --cert-file=/etc/kubernetes/pki/
 ```
 
-Attach the strace to the `etcd` process:
+Attach strace to the `etcd` process:
 
 ```console
 sudo strace -f -p 6900
 ```
 
-List the files opened by the `etcd`:
+List the files opened by `etcd`:
 
 ```console
 $ sudo ls -l /proc/6900/fd | grep '/'
@@ -1790,13 +1846,13 @@ lrwx------ 1 root root 64 Oct 11 10:52 7 -> /var/lib/etcd/member/snap/db
 lr-x------ 1 root root 64 Oct 11 10:52 9 -> /var/lib/etcd/member/wal
 ```
 
-Create secret:
+Create Secret:
 
 ```bash
 kubectl create secret generic my-secret --from-literal=password=1234512345
 ```
 
-Find the secret `1234512345` in the database file:
+Find the Secret `1234512345` in the etcd database file:
 
 ```console
 $ sudo strings /proc/6900/fd/7 | grep -B10 1234512345
@@ -1813,7 +1869,7 @@ password
 1234512345
 ```
 
-Run pod with the secret as environment variable:
+Run a Pod with the Secret exposed as an environment variable:
 
 ```bash
 kubectl apply -f - << EOF
@@ -1847,7 +1903,7 @@ $ ps -elf | grep sh
 ...
 ```
 
-You can see the `password=1234512345` in the `/proc` directory:
+You can see `password=1234512345` in the `/proc` directory for the container's process:
 
 ```console
 $ sudo cat /proc/30682/environ
@@ -1870,7 +1926,7 @@ sudo systemctl start falco
 sudo systemctl enable falco
 ```
 
-Monitor `/var/log/syslog` on `kubenode01` when working with Falco:
+Monitor `/var/log/syslog` on `kubenode01` while working with Falco:
 
 ```bash
 sudo tail -f /var/log/syslog
@@ -1884,32 +1940,32 @@ Login to master node and run test pod:
 kubectl run busybox --image=busybox --restart=Never --command -- sh -c "sleep 3000"
 ```
 
-Exec into the pod:
+Exec into the Pod:
 
 ```bash
 kubectl exec -it busybox -- sh
 ```
 
-Falco should report something like:
+Falco should report an event similar to the following:
 
 ```console
 Oct 13 12:33:36 kubenode01 falco[4717]: 12:33:36.936085881: Notice A shell was spawned in a container with an attached terminal (user=root user_loginuid=-1 busybox (id=2dd1f809726c) shell=sh parent=runc cmdline=sh terminal=34816 container_id=2dd1f809726c image=docker.io/library/busybox)
 ```
 
-Modify the `/etc/passwd` file in the `busybox` pod:
+Modify the `/etc/passwd` file in the `busybox` Pod:
 
 ```bash
 echo "user" >> /etc/passwd
 ```
 
-Falco should notice it:
+Falco should detect this activity and log an event:
 
 ```console
 Oct 13 12:36:20 kubenode01 falco[4717]: 12:36:20.448778155: Error File below /etc opened for writing (user=root user_loginuid=-1 command=sh parent=<NA> pcmdline=<NA> file=/etc/passwd program=sh gparent=<NA> ggparent=<NA> gggparent=<NA> container_id=2dd1f809726c image=docker.io/library/busybox)
 ```
 
-Run the pod which will periodically run `apt update` to let falco log these
-events:
+Run a Pod that periodically executes `apk update` to generate events for Falco
+to log:
 
 ```bash
 kubectl apply -f - << EOF
@@ -1926,7 +1982,7 @@ spec:
 EOF
 ```
 
-Chnage the `Launch Package Management Process in Container` rule
+Change the `Launch Package Management Process in Container` rule
 in `/etc/falco/falco_rules.yaml` to log only "container_name" and "image".
 
 You can see the the available fields here: [Supported Fields for Conditions and Outputs](https://falco.org/docs/rules/supported-fields/)
@@ -1956,7 +2012,7 @@ $ sudo vi /etc/falco/falco_rules.local.yaml
   tags: [process, mitre_persistence]
 ```
 
-Restart Faclo and check the logs:
+Restart Falco and check the logs:
 
 ```console
 $ sudo systemctl restart falco
@@ -1970,7 +2026,7 @@ Oct 13 13:18:36 kubenode01 falco: 13:18:36.830684811: Error falco-test-container
 
 ## Auditing
 
-Enable Auditing for the k8s cluster:
+Enable auditing for the Kubernetes cluster:
 
 ```console
 $ sudo mkdir -pv /etc/kubernetes/audit
@@ -2008,7 +2064,7 @@ Create test secret:
 kubectl create secret generic test-audit-secret --from-literal password=0987654321
 ```
 
-Get the auditlog related to `test-audit-secret`:
+Retrieve audit logs related to `test-audit-secret`:
 
 ```console
 $ sudo grep --no-filename test-audit-secret /etc/kubernetes/audit/logs/* | jq
@@ -2050,7 +2106,10 @@ $ sudo grep --no-filename test-audit-secret /etc/kubernetes/audit/logs/* | jq
 }
 ```
 
-Change the Audit policy to log details only `ConfigMap`:
+Change the audit policy to log `RequestResponse` details only for ConfigMap
+resources, and Metadata for Secrets and ConfigMaps. NonResourceURLs like /api
+and /version will also be logged at RequestResponse level for authenticated
+users. All other events will be set to None:
 
 ```bash
 $ sudo tee /etc/kubernetes/audit/audit-policy.yaml << EOF
@@ -2074,7 +2133,7 @@ EOF
 
 ### AppArmor and Docker
 
-Check the AppArmor status:
+Check the AppArmor status on the node:
 
 ```console
 # vagrant ssh kubenode01
@@ -2148,7 +2207,7 @@ apparmor module is loaded.
 0 processes are unconfined but have a profile defined.
 ```
 
-Create apparmor profile for docker + nginx:
+Create an AppArmor profile for Docker and Nginx:
 
 ```bash
 cat > /etc/apparmor.d/docker-nginx << EOF
@@ -2240,7 +2299,8 @@ apparmor module is loaded.
 ...
 ```
 
-Run standard docker with nginx image and run shell inside:
+Run a standard Docker container with the Nginx image and attempt to run a shell
+inside:
 
 ```console
 $ docker run -d nginx
@@ -2249,7 +2309,8 @@ $ docker exec -it 8ba791147b1b sh
 # sh
 ```
 
-Do the same with apparmor which should block sh from running:
+Repeat the process, but this time apply the AppArmor profile, which should
+prevent the shell from running:
 
 ```console
 $ docker run --security-opt apparmor=docker-nginx -d nginx
@@ -2259,7 +2320,7 @@ $ docker exec -it b5d752054efb sh
 sh: 1: sh: Permission denied
 ```
 
-### AppArmor and K8s
+### AppArmor and Kubernetes
 
 ```bash
 kubectl apply -f - << EOF
@@ -2278,8 +2339,8 @@ spec:
 EOF
 ```
 
-Get into the pod and run sh (it's not allowed by `docker-nginx` AppArmor
-profile):
+Attempt to execute a shell within the Pod (this action should be denied by the
+`docker-nginx` AppArmor profile):
 
 ```console
 # kubectl exec -it nginx -- bash
