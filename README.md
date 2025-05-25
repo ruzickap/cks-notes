@@ -52,7 +52,7 @@ sudo sysctl --system
 
 sudo mkdir -p /etc/containerd
 containerd config default |
-  sed 's/SystemdCgroup = false/SystemdCgroup = true/' | \
+  sed 's/SystemdCgroup = false/SystemdCgroup = true/' |
   sudo tee /etc/containerd/config.toml
 sudo systemctl restart containerd
 
@@ -67,9 +67,9 @@ sudo systemctl enable containerd docker
 sudo systemctl restart containerd
 
 sudo apt-get install -y \
-  kubelet="${KUBE_VERSION}"-00 \
-  kubeadm="${KUBE_VERSION}"-00 \
-  kubectl="${KUBE_VERSION}"-00
+  kubelet="${KUBE_VERSION}-00" \
+  kubeadm="${KUBE_VERSION}-00" \
+  kubectl="${KUBE_VERSION}-00"
 sudo apt-mark hold kubelet kubeadm kubectl
 
 cat >> ~/.bashrc << EOF
@@ -406,7 +406,8 @@ spec:
 EOF
 ```
 
-You should be able to reach the Ingress and the backend services, which will provide different responses:
+You should be able to reach the Ingress and the backend services, which will
+provide different responses:
 
 ```console
 $ curl -sk https://192.168.56.2:31606/app1 | jq
@@ -457,8 +458,7 @@ Generate new cert:
 ```bash
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
   -keyout key.pem -out cert.pem \
-  -subj "/C=CZ/ST=Czech/L=Prague/O=IT/OU=DevOps\
-/CN=my-secure-ingress.k8s.cluster.com"
+  -subj "/C=CZ/ST=Czech/L=Prague/O=IT/OU=DevOps/CN=my-secure-ingress.k8s.cluster.com"
 ```
 
 Create k8s secret:
@@ -788,8 +788,8 @@ $ curl -k https://localhost:6443
 }
 ```
 
-Revert this change, because `kube-apiserver` requires anonymous API requests for its own
-liveness probes.
+Revert this change, because `kube-apiserver` requires anonymous API requests for
+its own liveness probes.
 
 ### Manual API request using curl
 
@@ -863,7 +863,8 @@ Copy the kubeconfig file to the machine where Vagrant is running:
 vagrant ssh kubemaster -c "kubectl config view --raw" > local.conf
 ```
 
-In the copied kubeconfig file, replace the `server` parameter with the external IP address and NodePort:
+In the copied kubeconfig file, replace the `server` parameter with the external
+IP address and NodePort:
 
 ```bash
 sed -i 's@\(.*server: https:\).*@\1//192.168.56.2:32689@' local.conf
@@ -928,9 +929,9 @@ Upgrade k8s cluster components:
 ```bash
 KUBE_VERSION=1.20.10
 sudo apt-get install -y --allow-change-held-packages \
-  kubelet=${KUBE_VERSION}-00 \
-  kubeadm=${KUBE_VERSION}-00 \
-  kubectl=${KUBE_VERSION}-00
+  kubelet="${KUBE_VERSION}-00" \
+  kubeadm="${KUBE_VERSION}-00" \
+  kubectl="${KUBE_VERSION}-00"
 ```
 
 Check the "upgrade plan":
@@ -1021,13 +1022,13 @@ Upgrade k8s cluster components:
 
 KUBE_VERSION=1.20.10
 sudo apt-get install -y --allow-change-held-packages \
-  kubeadm=${KUBE_VERSION}-00
+  kubeadm="${KUBE_VERSION}-00"
 
 sudo kubeadm upgrade node
 
 sudo apt-get install -y --allow-change-held-packages \
-  kubelet=${KUBE_VERSION}-00 \
-  kubectl=${KUBE_VERSION}-00
+  kubelet="${KUBE_VERSION}-00" \
+  kubectl="${KUBE_VERSION}-00"
 ```
 
 Check the nodes:
@@ -1430,7 +1431,8 @@ instead.
 
 * [Create a policy and a pod](https://kubernetes.io/docs/concepts/policy/pod-security-policy/#create-a-policy-and-a-pod)
 
-Create a new namespace and a Pod that stores the current date in `/tmp/date` on the host node:
+Create a new namespace and a Pod that stores the current date in `/tmp/date` on
+the host node:
 
 ```bash
 kubectl create namespace my-namespace
@@ -1962,7 +1964,8 @@ Falco should detect this activity and log an event:
 Oct 13 12:36:20 kubenode01 falco[4717]: 12:36:20.448778155: Error File below /etc opened for writing (user=root user_loginuid=-1 command=sh parent=<NA> pcmdline=<NA> file=/etc/passwd program=sh gparent=<NA> ggparent=<NA> gggparent=<NA> container_id=2dd1f809726c image=docker.io/library/busybox)
 ```
 
-Run a Pod that periodically executes `apk update` to generate events for Falco to log:
+Run a Pod that periodically executes `apk update` to generate events for Falco
+to log:
 
 ```bash
 kubectl apply -f - << EOF
@@ -2296,7 +2299,8 @@ apparmor module is loaded.
 ...
 ```
 
-Run a standard Docker container with the Nginx image and attempt to run a shell inside:
+Run a standard Docker container with the Nginx image and attempt to run a shell
+inside:
 
 ```console
 $ docker run -d nginx
@@ -2305,7 +2309,8 @@ $ docker exec -it 8ba791147b1b sh
 # sh
 ```
 
-Repeat the process, but this time apply the AppArmor profile, which should prevent the shell from running:
+Repeat the process, but this time apply the AppArmor profile, which should
+prevent the shell from running:
 
 ```console
 $ docker run --security-opt apparmor=docker-nginx -d nginx
@@ -2334,8 +2339,8 @@ spec:
 EOF
 ```
 
-Attempt to execute a shell within the Pod (this action should be denied by the `docker-nginx` AppArmor
-profile):
+Attempt to execute a shell within the Pod (this action should be denied by the
+`docker-nginx` AppArmor profile):
 
 ```console
 # kubectl exec -it nginx -- bash
