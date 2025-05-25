@@ -29,20 +29,20 @@ KUBE_VERSION=1.21.5
 sudo curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg \
   https://packages.cloud.google.com/apt/doc/apt-key.gpg
 echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] \
-  https://apt.kubernetes.io/ kubernetes-xenial main" | \
+  https://apt.kubernetes.io/ kubernetes-xenial main" |
   sudo tee /etc/apt/sources.list.d/kubernetes.list
 
 sudo apt-get update
 sudo apt-get install -y apparmor-utils apt-transport-https ca-certificates \
   containerd curl docker.io etcd-client jq lsb-release mc strace tree
 
-cat <<EOF | sudo tee /etc/modules-load.d/containerd.conf
+cat << EOF | sudo tee /etc/modules-load.d/containerd.conf
 overlay
 br_netfilter
 EOF
 sudo modprobe overlay
 sudo modprobe br_netfilter
-cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
+cat << EOF | sudo tee /etc/sysctl.d/k8s.conf
 net.bridge.bridge-nf-call-iptables  = 1
 net.ipv4.ip_forward                 = 1
 net.bridge.bridge-nf-call-ip6tables = 1
@@ -51,12 +51,12 @@ EOF
 sudo sysctl --system
 
 sudo mkdir -p /etc/containerd
-containerd config default | \
+containerd config default |
   sed 's/SystemdCgroup = false/SystemdCgroup = true/' | \
   sudo tee /etc/containerd/config.toml
 sudo systemctl restart containerd
 
-cat <<EOF | sudo tee /etc/crictl.yaml
+cat << EOF | sudo tee /etc/crictl.yaml
 runtime-endpoint: unix:///run/containerd/containerd.sock
 EOF
 
@@ -72,7 +72,7 @@ sudo apt-get install -y \
   kubectl="${KUBE_VERSION}"-00
 sudo apt-mark hold kubelet kubeadm kubectl
 
-cat >>~/.bashrc <<EOF
+cat >> ~/.bashrc << EOF
 source <(kubectl completion bash)
 alias k=kubectl
 complete -F __start_kubectl k
@@ -1467,7 +1467,7 @@ EOF
 
 kubectl exec -it -n my-namespace \
   "$(kubectl get pod -n my-namespace -l app=my-busybox --no-headers \
-  -o custom-columns=':metadata.name')" -- cat /tmp/date
+    -o custom-columns=':metadata.name')" -- cat /tmp/date
 ```
 
 Enable the PodSecurityPolicy admission plugin in the API server:
@@ -1696,7 +1696,7 @@ kubectl delete K8sTrustedImages,ConstraintTemplates --all
 Install trivy:
 
 ```bash
-curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | \
+curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh |
   sh -s -- -b /usr/local/bin v0.20.0
 ```
 
