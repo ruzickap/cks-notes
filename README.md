@@ -26,11 +26,15 @@ Execute the following commands on both Kubernetes nodes (`kubemaster` and `kuben
 
 KUBE_VERSION=1.21.5
 
-sudo curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
-echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+sudo curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg \
+  https://packages.cloud.google.com/apt/doc/apt-key.gpg
+echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] \
+  https://apt.kubernetes.io/ kubernetes-xenial main" | \
+  sudo tee /etc/apt/sources.list.d/kubernetes.list
 
 sudo apt-get update
-sudo apt-get install -y apparmor-utils apt-transport-https ca-certificates containerd curl docker.io etcd-client jq lsb-release mc strace tree
+sudo apt-get install -y apparmor-utils apt-transport-https ca-certificates \
+  containerd curl docker.io etcd-client jq lsb-release mc strace tree
 
 cat << EOF | sudo tee /etc/modules-load.d/containerd.conf
 overlay
@@ -47,7 +51,9 @@ EOF
 sudo sysctl --system
 
 sudo mkdir -p /etc/containerd
-containerd config default | sed 's/SystemdCgroup = false/SystemdCgroup = true/' | sudo tee /etc/containerd/config.toml
+containerd config default | \
+  sed 's/SystemdCgroup = false/SystemdCgroup = true/' | \
+  sudo tee /etc/containerd/config.toml
 sudo systemctl restart containerd
 
 cat << EOF | sudo tee /etc/crictl.yaml
@@ -75,7 +81,10 @@ Execute the following commands on the **master** node (`kubemaster`) only:
 ```bash
 # vagrant ssh kubemaster
 
-sudo kubeadm init --cri-socket /run/containerd/containerd.sock --kubernetes-version=${KUBE_VERSION} --pod-network-cidr=10.224.0.0/16 --apiserver-advertise-address=192.168.56.2 --skip-token-print
+sudo kubeadm init --cri-socket /run/containerd/containerd.sock \
+  --kubernetes-version=${KUBE_VERSION} \
+  --pod-network-cidr=10.224.0.0/16 \
+  --apiserver-advertise-address=192.168.56.2 --skip-token-print
 
 mkdir -p "${HOME}/.kube"
 sudo cp -i /etc/kubernetes/admin.conf "${HOME}/.kube/config"
@@ -93,7 +102,10 @@ Execute the following commands on the **worker** node (`kubenode01`) only:
 
 ```bash
 # vagrant ssh kubenode01
-sudo kubeadm join --cri-socket /run/containerd/containerd.sock --kubernetes-version=${KUBE_VERSION} 192.168.56.2:6443 --token i0sn6a.jnvsbw73yi03nre7 --discovery-token-ca-cert-hash sha256:ffa3c5c3cd8ee55bd9497e8d6d9556d3bcef7b0879f871a088819f232c4673e0
+sudo kubeadm join --cri-socket /run/containerd/containerd.sock \
+  --kubernetes-version=${KUBE_VERSION} 192.168.56.2:6443 \
+  --token i0sn6a.jnvsbw73yi03nre7 \
+  --discovery-token-ca-cert-hash sha256:ffa3c5c3cd8ee55bd9497e8d6d9556d3bcef7b0879f871a088819f232c4673e0
 ```
 
 ## Kubernetes certificates
@@ -326,7 +338,8 @@ curl -k http://192.168.56.2:32645
 Install `ingress-nginx` and delete "NetworkPolicies" + "Services" + "Pods":
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.0.3/deploy/static/provider/baremetal/deploy.yaml
+kubectl apply -f \
+  https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.0.3/deploy/static/provider/baremetal/deploy.yaml
 kubectl delete networkpolicies,service,pods --all
 ```
 
@@ -342,7 +355,8 @@ service/ingress-nginx-controller             NodePort    10.96.253.251   <none> 
 service/ingress-nginx-controller-admission   ClusterIP   10.100.6.131    <none>        443/TCP                      13s
 ```
 
-Verify that `ingress-nginx` is running by executing the following command (a 404 error is expected at this stage):
+Verify that `ingress-nginx` is running by executing the following command
+(a 404 error is expected at this stage):
 
 ```bash
 curl -kv http://192.168.56.2:32550 https://192.168.56.2:31606
@@ -351,8 +365,10 @@ curl -kv http://192.168.56.2:32550 https://192.168.56.2:31606
 Start two applications:
 
 ```bash
-kubectl run app1 --image=ghcr.io/stefanprodan/podinfo:6.0.0 --port=9898 --expose=true --env="PODINFO_UI_MESSAGE=app1"
-kubectl run app2 --image=ghcr.io/stefanprodan/podinfo:6.0.0 --port=9898 --expose=true --env="PODINFO_UI_MESSAGE=app2"
+kubectl run app1 --image=ghcr.io/stefanprodan/podinfo:6.0.0 --port=9898 \
+  --expose=true --env="PODINFO_UI_MESSAGE=app1"
+kubectl run app2 --image=ghcr.io/stefanprodan/podinfo:6.0.0 --port=9898 \
+  --expose=true --env="PODINFO_UI_MESSAGE=app2"
 ```
 
 ```bash
@@ -436,7 +452,7 @@ Generate new cert:
 ```bash
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
   -keyout key.pem -out cert.pem \
-  -subj /C=CZ/ST=Czech/L=Prague/O=IT/OU=DevOps/CN=my-secure-ingress.k8s.cluster.com
+  -subj "/C=CZ/ST=Czech/L=Prague/O=IT/OU=DevOps/CN=my-secure-ingress.k8s.cluster.com"
 ```
 
 Create k8s secret:
@@ -499,8 +515,14 @@ $ curl -kv https://my-secure-ingress.k8s.cluster.com:31606/app2 --resolve my-sec
 * [kube-bench](https://github.com/aquasecurity/kube-bench)
 
 ```bash
-docker run --pid=host -v /etc:/etc:ro -v /var:/var:ro -v "$(which kubectl):/usr/local/mount-from-host/bin/kubectl" -v ~/.kube:/.kube -e KUBECONFIG=/.kube/config -t aquasec/kube-bench:latest master
-docker run --pid=host -v /etc:/etc:ro -v /var:/var:ro -v "$(which kubectl):/usr/local/mount-from-host/bin/kubectl" -v ~/.kube:/.kube -e KUBECONFIG=/.kube/config -t aquasec/kube-bench:latest node
+docker run --pid=host -v /etc:/etc:ro -v /var:/var:ro \
+  -v "$(which kubectl):/usr/local/mount-from-host/bin/kubectl" \
+  -v ~/.kube:/.kube -e KUBECONFIG=/.kube/config \
+  -t aquasec/kube-bench:latest master
+docker run --pid=host -v /etc:/etc:ro -v /var:/var:ro \
+  -v "$(which kubectl):/usr/local/mount-from-host/bin/kubectl" \
+  -v ~/.kube:/.kube -e KUBECONFIG=/.kube/config \
+  -t aquasec/kube-bench:latest node
 ```
 
 You can install it locally:
@@ -580,7 +602,7 @@ Create Jane's certificate:
 touch ~/.rnd
 openssl genrsa -out jane.key 2048
 openssl req -new -key jane.key -out jane.csr \
-  -subj /C=CZ/ST=Czech/L=Prague/O=IT/OU=DevOps/CN=jane
+  -subj "/C=CZ/ST=Czech/L=Prague/O=IT/OU=DevOps/CN=jane"
 ```
 
 Create `CertificateSigningRequest`:
@@ -616,8 +638,10 @@ jane   95s   kubernetes.io/kube-apiserver-client   kubernetes-admin   <none>    
 Save signed Jane's certificate to file and create context:
 
 ```bash
-kubectl get certificatesigningrequest jane -o=jsonpath='{.status.certificate}' | base64 -d > jane.crt
-kubectl config set-credentials jane --client-key=jane.key --client-certificate=jane.crt --embed-certs=true
+kubectl get certificatesigningrequest jane \
+  -o=jsonpath='{.status.certificate}' | base64 -d > jane.crt
+kubectl config set-credentials jane --client-key=jane.key \
+  --client-certificate=jane.crt --embed-certs=true
 kubectl config set-context jane --user=jane --cluster=kubernetes
 ```
 
@@ -764,10 +788,17 @@ liveness probes.
 Extract the following data from your kubeconfig file:
 
 ```bash
-kubectl config view --raw -o jsonpath='{.clusters[?(@.name=="kubernetes")].cluster.certificate-authority-data}' | base64 -d > ca
-kubectl config view --raw -o jsonpath='{.users[?(@.name=="kubernetes-admin")].user.client-certificate-data}' | base64 -d > crt
-kubectl config view --raw -o jsonpath='{.users[?(@.name=="kubernetes-admin")].user.client-key-data}' | base64 -d > key
-SERVER=$(kubectl config view --raw -o jsonpath='{.clusters[?(@.name=="kubernetes")].cluster.server}')
+kubectl config view --raw \
+  -o jsonpath='{.clusters[?(@.name=="kubernetes")].cluster.certificate-authority-data}' \
+  | base64 -d > ca
+kubectl config view --raw \
+  -o jsonpath='{.users[?(@.name=="kubernetes-admin")].user.client-certificate-data}' \
+  | base64 -d > crt
+kubectl config view --raw \
+  -o jsonpath='{.users[?(@.name=="kubernetes-admin")].user.client-key-data}' \
+  | base64 -d > key
+SERVER=$(kubectl config view --raw \
+  -o jsonpath='{.clusters[?(@.name=="kubernetes")].cluster.server}')
 echo "${SERVER}"
 ```
 
@@ -891,7 +922,10 @@ Upgrade k8s cluster components:
 
 ```bash
 KUBE_VERSION=1.20.10
-sudo apt-get install -y --allow-change-held-packages kubelet=${KUBE_VERSION}-00 kubeadm=${KUBE_VERSION}-00 kubectl=${KUBE_VERSION}-00
+sudo apt-get install -y --allow-change-held-packages \
+  kubelet=${KUBE_VERSION}-00 \
+  kubeadm=${KUBE_VERSION}-00 \
+  kubectl=${KUBE_VERSION}-00
 ```
 
 Check the "upgrade plan":
@@ -981,11 +1015,14 @@ Upgrade k8s cluster components:
 # vagrant ssh kubenode01
 
 KUBE_VERSION=1.20.10
-sudo apt-get install -y --allow-change-held-packages kubeadm=${KUBE_VERSION}-00
+sudo apt-get install -y --allow-change-held-packages \
+  kubeadm=${KUBE_VERSION}-00
 
 sudo kubeadm upgrade node
 
-sudo apt-get install -y --allow-change-held-packages kubelet=${KUBE_VERSION}-00 kubectl=${KUBE_VERSION}-00
+sudo apt-get install -y --allow-change-held-packages \
+  kubelet=${KUBE_VERSION}-00 \
+  kubectl=${KUBE_VERSION}-00
 ```
 
 Check the nodes:
@@ -996,6 +1033,7 @@ kubectl uncordon kubenode01
 
 ```console
 node/kubenode01 uncordoned
+```
 
 ```bash
 kubectl get nodes
@@ -1210,8 +1248,8 @@ Read the Secret from etcd; it should be encrypted:
 ETCDCTL_API=3 etcdctl get /registry/secrets/default/secret3 \
   --cert=/etc/kubernetes/pki/apiserver-etcd-client.crt \
   --key=/etc/kubernetes/pki/apiserver-etcd-client.key \
-  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
-  | hexdump -C
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt | \
+  hexdump -C
 00000000  2f 72 65 67 69 73 74 72  79 2f 73 65 63 72 65 74  |/registry/secret|
 00000010  73 2f 64 65 66 61 75 6c  74 2f 73 65 63 72 65 74  |s/default/secret|
 00000020  33 0a 6b 38 73 3a 65 6e  63 3a 61 65 73 63 62 63  |3.k8s:enc:aescbc|
@@ -1269,7 +1307,8 @@ EOF
 Create busybox pod:
 
 ```bash
-kubectl run busybox --image=busybox --command --dry-run=client -o yaml -- sh -c 'sleep 1d'
+kubectl run busybox --image=busybox --command \
+  --dry-run=client -o yaml -- sh -c 'sleep 1d'
 ```
 
 ```bash
@@ -1421,7 +1460,9 @@ spec:
           path: /tmp
 EOF
 
-kubectl exec -it -n my-namespace "$(kubectl get pod -n my-namespace -l app=my-busybox --no-headers -o custom-columns=':metadata.name')" -- cat /tmp/date
+kubectl exec -it -n my-namespace \
+  "$(kubectl get pod -n my-namespace -l app=my-busybox --no-headers \
+  -o custom-columns=':metadata.name')" -- cat /tmp/date
 ```
 
 Enable the PodSecurityPolicy admission plugin in the API server:
@@ -1466,12 +1507,16 @@ EOF
 Create a `Role` and `RoleBinding` that grant permission to use PodSecurityPolicies:
 
 ```bash
-kubectl create clusterrole psp-access --verb=use --resource=podsecuritypolicies
-kubectl create clusterrolebinding psp-access --clusterrole=psp-access --group=system:serviceaccounts:my-namespace --namespace=my-namespace
+kubectl create clusterrole psp-access --verb=use \
+  --resource=podsecuritypolicies
+kubectl create clusterrolebinding psp-access \
+  --clusterrole=psp-access \
+  --group=system:serviceaccounts:my-namespace --namespace=my-namespace
 ```
 
-All Pods in the `my-namespace` namespace are now restricted to using `HostPaths` within `/var/tmp/`.
-If the existing Pod is restarted, you will observe the following:
+All Pods in the `my-namespace` namespace are now restricted to using
+`HostPaths` within `/var/tmp/`. If the existing Pod is restarted, you will
+observe the following:
 
 ```console
 $ kubectl delete pod -n my-namespace --all
@@ -1526,7 +1571,8 @@ EOF
 Install Gatekeeper:
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/open-policy-agent/gatekeeper/release-3.5/deploy/gatekeeper.yaml
+kubectl apply -f \
+  https://raw.githubusercontent.com/open-policy-agent/gatekeeper/release-3.5/deploy/gatekeeper.yaml
 ```
 
 Check the CRDs:
@@ -1645,7 +1691,8 @@ kubectl delete K8sTrustedImages,ConstraintTemplates --all
 Install trivy:
 
 ```bash
-curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin v0.20.0
+curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | \
+  sh -s -- -b /usr/local/bin v0.20.0
 ```
 
 Check vulnerabilities:
@@ -1698,7 +1745,8 @@ Total: 4 (CRITICAL: 4)
 List all images in the cluster:
 
 ```bash
-kubectl get pods -A --no-headers -o=custom-columns='DATA:spec.containers[*].image'
+kubectl get pods -A --no-headers \
+  -o=custom-columns='DATA:spec.containers[*].image'
 ```
 
 List all container images that have `CRITICAL` vulnerabilities:
@@ -2048,7 +2096,10 @@ $ sudo grep --no-filename test-audit-secret /etc/kubernetes/audit/logs/* | jq
 }
 ```
 
-Change the audit policy to log `RequestResponse` details only for ConfigMap resources, and Metadata for Secrets and ConfigMaps. NonResourceURLs like /api and /version will also be logged at RequestResponse level for authenticated users. All other events will be set to None:
+Change the audit policy to log `RequestResponse` details only for ConfigMap
+resources, and Metadata for Secrets and ConfigMaps. NonResourceURLs like /api
+and /version will also be logged at RequestResponse level for authenticated
+users. All other events will be set to None:
 
 ```bash
 $ sudo tee /etc/kubernetes/audit/audit-policy.yaml << EOF
