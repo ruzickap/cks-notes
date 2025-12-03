@@ -1693,7 +1693,7 @@ kubectl delete K8sTrustedImages,ConstraintTemplates --all
 ## Image vulnerability scanning
 
 * [Trivy documentation](https://aquasecurity.github.io/trivy/)
-* [Installation](https://aquasecurity.github.io/trivy/v0.20.0/getting-started/installation/):
+* [Installation](https://github.com/aquasecurity/trivy/blob/v0.20.0/docs/getting-started/installation.md):
 
 Install trivy:
 
