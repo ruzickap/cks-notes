@@ -150,7 +150,7 @@ Include ticket numbers when applicable: `feat/issue-42-add-rbac-notes`
 ## Key Configuration Files
 
 | File                     | Purpose                                 |
-| ------------------------ | --------------------------------------- |
+|--------------------------|-----------------------------------------|
 | `.mega-linter.yml`       | Central linting and security config     |
 | `.rumdl.toml`            | Markdown linter rules                   |
 | `lychee.toml`            | Link checker settings                   |
