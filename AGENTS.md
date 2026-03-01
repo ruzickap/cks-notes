@@ -20,14 +20,14 @@ rumdl AGENTS.md
 
 # Shell validation -- extract bash blocks from Markdown, then lint
 # (CI uses `mq` to extract; manually check individual blocks)
-shellcheck --exclude=SC2317 <script.sh>
-shfmt --case-indent --indent 2 --space-redirects --diff <script.sh>
+shellcheck --exclude=SC2317 script.sh
+shfmt --case-indent --indent 2 --space-redirects --diff script.sh
 
 # Link checking
 lychee --config lychee.toml README.md
 
 # JSON validation (if JSON files are added)
-jsonlint --comments <file.json>
+jsonlint --comments file.json
 
 # GitHub Actions workflow validation
 actionlint
@@ -150,14 +150,14 @@ Include ticket numbers when applicable: `feat/issue-42-add-rbac-notes`
 
 ## Key Configuration Files
 
-| File | Purpose |
-|---|---|
-| `.mega-linter.yml` | Central linting and security config |
-| `.rumdl.toml` | Markdown linter rules |
-| `lychee.toml` | Link checker settings |
-| `.checkov.yml` | Checkov IaC scanner (skips CKV_GHA_7) |
-| `.gitleaks.toml` | Secret detection (allowlists README.md) |
-| `.github/renovate.json5` | Dependency update automation |
+| File                      | Purpose                                  |
+|---------------------------|------------------------------------------|
+| `.mega-linter.yml`        | Central linting and security config      |
+| `.rumdl.toml`             | Markdown linter rules                    |
+| `lychee.toml`             | Link checker settings                    |
+| `.checkov.yml`            | Checkov IaC scanner (skips CKV_GHA_7)   |
+| `.gitleaks.toml`          | Secret detection (allowlists README.md)  |
+| `.github/renovate.json5`  | Dependency update automation             |
 
 ## Quality Checklist
 
