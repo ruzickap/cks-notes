@@ -1,2 +1,2 @@
-# Vgrantfile git repository
-certified-kubernetes-administrator-course
+# pre-commit configuration file
+.pre-commit-config.yaml

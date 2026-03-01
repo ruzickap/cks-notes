@@ -100,8 +100,7 @@ When modifying `.github/workflows/*.yml`:
   `uses: actions/checkout@<full-sha> # v6.0.2`
 - **Timeouts**: Set `timeout-minutes` on every job (5 or 10)
 - **YAML format**: Start files with `---` and a descriptive comment
-- **Ordering**: Use `# keep-sorted start` / `# keep-sorted end`
-  markers for alphabetically sorted blocks
+- **Ordering**: Use `# keep-sorted` markers for alphabetically sorted blocks
 - **Triggers**: Include `workflow_dispatch` on every workflow
 - **Runners**: Prefer `ubuntu-24.04-arm` where tools support it
 
@@ -150,14 +149,14 @@ Include ticket numbers when applicable: `feat/issue-42-add-rbac-notes`
 
 ## Key Configuration Files
 
-| File                      | Purpose                                  |
-|---------------------------|------------------------------------------|
-| `.mega-linter.yml`        | Central linting and security config      |
-| `.rumdl.toml`             | Markdown linter rules                    |
-| `lychee.toml`             | Link checker settings                    |
-| `.checkov.yml`            | Checkov IaC scanner (skips CKV_GHA_7)   |
-| `.gitleaks.toml`          | Secret detection (allowlists README.md)  |
-| `.github/renovate.json5`  | Dependency update automation             |
+| File                     | Purpose                                 |
+| ------------------------ | --------------------------------------- |
+| `.mega-linter.yml`       | Central linting and security config     |
+| `.rumdl.toml`            | Markdown linter rules                   |
+| `lychee.toml`            | Link checker settings                   |
+| `.checkov.yml`           | Checkov IaC scanner (skips CKV_GHA_7)   |
+| `.gitleaks.toml`         | Secret detection (allowlists README.md) |
+| `.github/renovate.json5` | Dependency update automation            |
 
 ## Quality Checklist
 
