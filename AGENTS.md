@@ -43,7 +43,7 @@ docker run --rm \
 
 ## Markdown Style
 
-- **Line length**: Wrap prose at 72 characters; code blocks are exempt
+- **Line length**: Wrap prose at 80 characters; code blocks are exempt
   (configured in `.rumdl.toml`: `MD013.code-blocks = false`)
 - **Heading hierarchy**: Never skip levels (H1 -> H2 -> H3, etc.)
 - **Code fences**: Always include a language identifier:
@@ -166,5 +166,5 @@ Include ticket numbers when applicable: `feat/issue-42-add-rbac-notes`
 - [ ] GitHub Actions changes pass `actionlint`
 - [ ] Actions pinned to full SHA commits
 - [ ] Commit message follows conventional format
-- [ ] Lines wrapped at 72 characters
+- [ ] Lines wrapped at 80 characters
 - [ ] Two-space indentation, no tabs
