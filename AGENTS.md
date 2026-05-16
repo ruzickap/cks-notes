@@ -84,7 +84,6 @@ Multiple overlapping scanners run in CI:
 - **Checkov**: IaC scanner (skips `CKV_GHA_7`)
 - **DevSkim**: Pattern scanner (ignores DS162092, DS137138;
   excludes `CHANGELOG.md`)
-- **KICS**: Fails only on HIGH severity
 - **Trivy**: HIGH/CRITICAL only, ignores unfixed vulnerabilities
 - **Gitleaks**: Secret detection (allowlists `README.md`)
 - **CodeQL**: Analyzes GitHub Actions workflows
