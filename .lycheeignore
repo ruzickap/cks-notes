@@ -1,0 +1,2 @@
+# falco.org blocks automated requests from CI environments
+https://falco.org/.*
