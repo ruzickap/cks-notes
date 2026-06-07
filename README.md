@@ -130,14 +130,14 @@ $ sudo tree /etc/kubernetes/pki
 ├── ca.crt
 ├── ca.key
 ├── etcd
-│   ├── ca.crt
-│   ├── ca.key
-│   ├── healthcheck-client.crt
-│   ├── healthcheck-client.key
-│   ├── peer.crt
-│   ├── peer.key
-│   ├── server.crt
-│   └── server.key
+│   ├── ca.crt
+│   ├── ca.key
+│   ├── healthcheck-client.crt
+│   ├── healthcheck-client.key
+│   ├── peer.crt
+│   ├── peer.key
+│   ├── server.crt
+│   └── server.key
 ├── front-proxy-ca.crt
 ├── front-proxy-ca.key
 ├── front-proxy-client.crt
