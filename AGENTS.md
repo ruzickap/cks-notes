@@ -42,8 +42,8 @@ otherwise get wrong:
 - `codespell` ignores the word `requestor` (`.codespellrc`).
 - DevSkim ignores insecure-HTTP-URL (`DS137138`) and debug-code (`DS162092`)
   findings — intentional `http://` links and demo commands are allowed.
-- `gitleaks` allowlists `README.md` (`.gitleaks.toml`) because the notes contain
-  example tokens/hashes. Still never add real secrets.
+- `gitleaks` allowlists `README.md` (`.betterleaks.toml`) because the notes
+  contain example tokens/hashes. Still never add real secrets.
 - `CHANGELOG.md` is excluded from every linter.
 
 ## Version control workflow
