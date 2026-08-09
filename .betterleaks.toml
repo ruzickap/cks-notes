@@ -4,4 +4,5 @@ useDefault = true
 [allowlist]
 paths = [
   '''^README.md$''',
+  '''^bash_commands_from_md\.sh$''',
 ]
