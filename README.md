@@ -1985,7 +1985,8 @@ EOF
 Change the `Launch Package Management Process in Container` rule
 in `/etc/falco/falco_rules.yaml` to log only "container_name" and "image".
 
-You can see the the available fields here: [Supported Fields for Conditions and Outputs](https://falco.org/docs/rules/supported-fields/)
+You can see the the available fields here:
+[Supported Fields for Conditions and Outputs](https://falco.org/docs/rules/supported-fields/)
 or using command line:
 
 ```bash
