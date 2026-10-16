@@ -4,7 +4,7 @@ Handy notes can also be found here: [https://github.com/dragon7-fc/misc/tree/138
 
 ## Test k8s cluster using Vagrant
 
-Prepare the test environment – a Kubernetes cluster with one master node and one
+Prepare the test environment: a Kubernetes cluster with one master node and one
 worker node using Vagrant + VirtualBox:
 
 ```bash
