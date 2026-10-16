@@ -4,7 +4,7 @@
 
 `cks-notes` is a single-document study-notes repo for the Certified Kubernetes
 Security Specialist (CKS) exam. **`README.md` (~2350 lines) is the entire
-product.** There is no application code, no build, and no test suite — the only
+product.** There is no application code, no build, and no test suite. The only
 "build" is linting. Almost all edits are to `README.md`.
 
 ## The real CI gate: MegaLinter (`documentation` flavor)
@@ -27,7 +27,7 @@ otherwise get wrong:
   - be `shfmt`-formatted with `--case-indent --indent 2 --space-redirects`
   - use uppercase bash variables (e.g. `${KUBE_VERSION}`)
   - Use ` ```console ` (not ` ```bash `) for shell blocks that show output or
-    `$`/`#` prompts — those are not valid runnable scripts and would fail
+    `$`/`#` prompts, because those are not valid runnable scripts and would fail
     shellcheck. This is the existing convention throughout `README.md`.
 - **Prose wraps at 80 chars** (rumdl `MD013`), but **code blocks are exempt**
   (`.rumdl.toml`). Do not reflow long commands inside code fences.
@@ -41,7 +41,7 @@ otherwise get wrong:
   `192.168.x` / `localhost` URLs in the notes are intentionally not checked.
 - `codespell` ignores the word `requestor` (`.codespellrc`).
 - DevSkim ignores insecure-HTTP-URL (`DS137138`) and debug-code (`DS162092`)
-  findings — intentional `http://` links and demo commands are allowed.
+  findings, so intentional `http://` links and demo commands are allowed.
 - `gitleaks` allowlists `README.md` (`.betterleaks.toml`) because the notes
   contain example tokens/hashes. Still never add real secrets.
 - `CHANGELOG.md` is excluded from every linter.
@@ -50,10 +50,10 @@ otherwise get wrong:
 
 - **`CHANGELOG.md` is auto-generated** by release-please (`release-type:
   simple`, runs on `main`). Never hand-edit it.
-- Commit subjects: Conventional Commits, **≤ 72 chars, not capitalized**
+- Commit subjects: Conventional Commits, **max 72 chars, not capitalized**
   (`commit-check.yml`). Validated only on PRs to `main`.
 - Branch names must follow Conventional Branch (`feature/`, `fix/`, `chore/`,
-  …); enforced by `commit-check` (bots like renovate/dependabot are exempt).
+  etc.); enforced by `commit-check` (bots like renovate/dependabot are exempt).
 - PR titles must be valid Conventional Commit (`semantic-pull-request.yml`).
 - All GitHub Actions are SHA-pinned and use `permissions: read-all`; keep it
   that way and run `actionlint` after editing any workflow.
