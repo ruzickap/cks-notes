@@ -11,6 +11,8 @@ worker node using Vagrant + VirtualBox:
 git clone git@github.com:kodekloudhub/certified-kubernetes-administrator-course.git
 
 cd certified-kubernetes-administrator-course || exit
+# Vagrantfile from 2021: kubemaster (192.168.56.2) and kubenode01 (192.168.56.3)
+git checkout 03c4fb34f553397db27a2af6ce0d6a500b4d17ae
 sed -i 's/NUM_WORKER_NODE = 2/NUM_WORKER_NODE = 1/' Vagrantfile
 
 vagrant up
@@ -24,12 +26,13 @@ Execute the following commands on both Kubernetes nodes (`kubemaster` and `kuben
 # vagrant ssh kubemaster
 # vagrant ssh kubenode01
 
-KUBE_VERSION=1.21.5
+# 1.24 is the oldest version on pkgs.k8s.io (the upgrade section moves to 1.24.17)
+KUBE_VERSION=1.24.16
 
-sudo curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg \
-  https://packages.cloud.google.com/apt/doc/apt-key.gpg
-echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] \
-  https://apt.kubernetes.io/ kubernetes-xenial main" |
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.24/deb/Release.key |
+  sudo gpg --dearmor -o /usr/share/keyrings/kubernetes-apt-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/kubernetes-apt-keyring.gpg] \
+  https://pkgs.k8s.io/core:/stable:/v1.24/deb/ /" |
   sudo tee /etc/apt/sources.list.d/kubernetes.list
 
 sudo apt-get update
@@ -67,9 +70,9 @@ sudo systemctl enable containerd docker
 sudo systemctl restart containerd
 
 sudo apt-get install -y \
-  kubelet="${KUBE_VERSION}-00" \
-  kubeadm="${KUBE_VERSION}-00" \
-  kubectl="${KUBE_VERSION}-00"
+  kubelet="${KUBE_VERSION}-1.1" \
+  kubeadm="${KUBE_VERSION}-1.1" \
+  kubectl="${KUBE_VERSION}-1.1"
 sudo apt-mark hold kubelet kubeadm kubectl
 
 cat >> ~/.bashrc << EOF
@@ -95,20 +98,21 @@ mkdir -p "${HOME}/.kube"
 sudo cp -i /etc/kubernetes/admin.conf "${HOME}/.kube/config"
 sudo chown "$(id -u):$(id -g)" "${HOME}/.kube/config"
 
-curl -LO https://github.com/cilium/cilium-cli/releases/latest/download/cilium-linux-amd64.tar.gz &&
+# cilium-cli v0.12 installs Cilium 1.12, the last one that runs on Linux 4.15
+curl -LO https://github.com/cilium/cilium-cli/releases/download/v0.12.13/cilium-linux-amd64.tar.gz &&
   sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin &&
   rm cilium-linux-amd64.tar.gz
 cilium install
 
-kubeadm token create --print-join-command --ttl 0
+kubeadm token create --print-join-command
 ```
 
 Execute the following commands on the **worker** node (`kubenode01`) only:
 
 ```bash
 # vagrant ssh kubenode01
-sudo kubeadm join --cri-socket /run/containerd/containerd.sock \
-  --kubernetes-version=${KUBE_VERSION} 192.168.56.2:6443 \
+# Use the token and hash printed by "kubeadm token create" on kubemaster
+sudo kubeadm join --cri-socket /run/containerd/containerd.sock 192.168.56.2:6443 \
   --token i0sn6a.jnvsbw73yi03nre7 \
   --discovery-token-ca-cert-hash sha256:ffa3c5c3cd8ee55bd9497e8d6d9556d3bcef7b0879f871a088819f232c4673e0
 ```
@@ -324,18 +328,16 @@ spec:
     spec:
       containers:
       - args:
-        # - --auto-generate-certificates     # Allow use port 9090 for insecure HTTP connections
+        - --auto-generate-certificates
         - --namespace=kubernetes-dashboard
-        - --authentication-mode=basic        # Enable basic authentication
         - --enable-skip-login=true           # Enable "skip button" on the login page will be shown
-        - --enable-insecure-login            # Enable Dashboard login when using HTTP
 ...
 ```
 
-You should be able to access the Kubernetes Dashboard at [http://192.168.56.2:32645](http://192.168.56.2:32645):
+You should be able to access the Kubernetes Dashboard at [https://192.168.56.2:32645](https://192.168.56.2:32645):
 
 ```bash
-curl -k http://192.168.56.2:32645
+curl -k https://192.168.56.2:32645
 ```
 
 ## Ingress
@@ -446,7 +448,7 @@ $ curl -sk https://192.168.56.2:31606/app2 | jq
 The Ingress controller uses a self-signed certificate by default:
 
 ```console
-$ curl -sk https://192.168.56.2:31606/app2
+$ curl -kv https://192.168.56.2:31606/app2
 ...
 * Server certificate:
 *  subject: O=Acme Co; CN=Kubernetes Ingress Controller Fake Certificate
@@ -524,18 +526,18 @@ $ curl -kv https://my-secure-ingress.k8s.cluster.com:31606/app2 --resolve my-sec
 docker run --pid=host -v /etc:/etc:ro -v /var:/var:ro \
   -v "$(which kubectl):/usr/local/mount-from-host/bin/kubectl" \
   -v ~/.kube:/.kube -e KUBECONFIG=/.kube/config \
-  -t aquasec/kube-bench:latest master
+  -t aquasec/kube-bench:latest run --targets master
 docker run --pid=host -v /etc:/etc:ro -v /var:/var:ro \
   -v "$(which kubectl):/usr/local/mount-from-host/bin/kubectl" \
   -v ~/.kube:/.kube -e KUBECONFIG=/.kube/config \
-  -t aquasec/kube-bench:latest node
+  -t aquasec/kube-bench:latest run --targets node
 ```
 
 You can install it locally:
 
 ```bash
 wget https://github.com/aquasecurity/kube-bench/releases/download/v0.6.5/kube-bench_0.6.5_linux_amd64.deb
-apt install ./kube-bench_0.6.5_linux_amd64.deb
+sudo apt install ./kube-bench_0.6.5_linux_amd64.deb
 ```
 
 ## Hashes
@@ -575,7 +577,7 @@ kubectl create rolebinding secret-manager-rolebinding --namespace=blue --role se
 
 Test "Roles" and "RoleBindings":
 
-```bash
+```console
 $ kubectl auth can-i get secrets --namespace=red --as jane
 yes
 $ kubectl auth can-i list secrets --namespace=red --as jane
@@ -593,8 +595,8 @@ kubectl create clusterrolebinding deploy-deleter --user=jane --clusterrole=deplo
 
 Test "ClusterRoles" and "ClusterRoleBindings":
 
-```bash
-kubectl auth can-i delete deployments --as jane --all-namespaces
+```console
+$ kubectl auth can-i delete deployments --as jane --all-namespaces
 yes
 ```
 
@@ -882,7 +884,7 @@ kubectl --kubeconfig=local.conf get ns
 
 ### Upgrade master node
 
-The cluster is currently running Kubernetes version 1.19:
+The cluster is currently running Kubernetes version 1.24.16:
 
 ```console
 # vagrant ssh kubemaster
@@ -890,9 +892,9 @@ kubectl get nodes
 ```
 
 ```console
-NAME         STATUS   ROLES    AGE   VERSION
-kubemaster   Ready    master   22m   v1.19.0
-kubenode01   Ready    <none>   22m   v1.19.0
+NAME         STATUS   ROLES           AGE   VERSION
+kubemaster   Ready    control-plane   22m   v1.24.16
+kubenode01   Ready    <none>          22m   v1.24.16
 ```
 
 Drain the master node:
@@ -908,62 +910,74 @@ kubectl get nodes
 ```
 
 ```console
-NAME         STATUS                     ROLES    AGE   VERSION
-kubemaster   Ready,SchedulingDisabled   master   25m   v1.19.0
-kubenode01   Ready                      <none>   24m   v1.19.0
+NAME         STATUS                     ROLES           AGE   VERSION
+kubemaster   Ready,SchedulingDisabled   control-plane   25m   v1.24.16
+kubenode01   Ready                      <none>          24m   v1.24.16
 ```
 
-Check available Kubernetes versions (the next minor version is 1.20):
+This lab stays on Kubernetes 1.24, the newest version Cilium 1.12 supports, so
+it upgrades to the latest 1.24 patch release. For a minor upgrade (for example
+to 1.25), first change `v1.24` to `v1.25` in
+`/etc/apt/sources.list.d/kubernetes.list` on every node and run
+`sudo apt-get update`.
+
+Check available Kubernetes versions:
 
 ```console
-$ apt-cache show kubeadm | grep '1.20'
-Version: 1.20.11-00
-Filename: pool/kubeadm_1.20.11-00_amd64_1343a8b5f81f535549d498a9cf38a2307eee0fc99ea64046b043efae50e31bfe.deb
-Version: 1.20.10-00
-Filename: pool/kubeadm_1.20.10-00_amd64_bef04cc2cb819b1298bd1c22bae9ba90c52cf581584f5f24871df8447ae93186.deb
+$ apt-cache show kubeadm | grep 'Version: 1.24'
+Version: 1.24.17-1.1
+Version: 1.24.16-1.1
 ...
 ```
 
-Upgrade k8s cluster components:
+Upgrade `kubeadm` first:
 
 ```bash
-KUBE_VERSION=1.20.10
+KUBE_VERSION=1.24.17
 sudo apt-get install -y --allow-change-held-packages \
-  kubelet="${KUBE_VERSION}-00" \
-  kubeadm="${KUBE_VERSION}-00" \
-  kubectl="${KUBE_VERSION}-00"
+  kubeadm="${KUBE_VERSION}-1.1"
 ```
 
 Check the "upgrade plan":
 
 ```console
-$ kubeadm upgrade plan
+$ sudo kubeadm upgrade plan
 ...
 Components that must be upgraded manually after you have upgraded the control plane with 'kubeadm upgrade apply':
-COMPONENT   CURRENT        AVAILABLE
-kubelet     1 x v1.19.0    v1.20.10
-            1 x v1.20.10   v1.20.10
+COMPONENT   CURRENT        TARGET
+kubelet     2 x v1.24.16   v1.24.17
 
-Upgrade to the latest stable version:
+Upgrade to the latest version in the v1.24 series:
 
-COMPONENT                 CURRENT   AVAILABLE
-kube-apiserver            v1.19.0   v1.20.10
-kube-controller-manager   v1.19.0   v1.20.10
-kube-scheduler            v1.19.0   v1.20.10
-kube-proxy                v1.19.0   v1.20.10
-CoreDNS                   1.7.0     1.7.0
-etcd                      3.4.9-1   3.4.13-0
+COMPONENT                 CURRENT    TARGET
+kube-apiserver            v1.24.16   v1.24.17
+kube-controller-manager   v1.24.16   v1.24.17
+kube-scheduler            v1.24.16   v1.24.17
+kube-proxy                v1.24.16   v1.24.17
+CoreDNS                   v1.8.6     v1.8.6
+etcd                      3.5.6-0    3.5.6-0
 
 You can now apply the upgrade by executing the following command:
 
-  kubeadm upgrade apply v1.20.10
+  kubeadm upgrade apply v1.24.17
 ...
 ```
 
-Upgrade the k8s cluster to `1.20.10`:
+Upgrade the k8s cluster to `1.24.17`:
 
 ```bash
-sudo kubeadm upgrade apply v1.20.10
+sudo kubeadm upgrade apply v1.24.17
+```
+
+Upgrade `kubelet` and `kubectl` after the control plane, then restart
+`kubelet`:
+
+```bash
+sudo apt-get install -y --allow-change-held-packages \
+  kubelet="${KUBE_VERSION}-1.1" \
+  kubectl="${KUBE_VERSION}-1.1"
+sudo systemctl daemon-reload
+sudo systemctl restart kubelet
 ```
 
 Check the nodes:
@@ -973,9 +987,9 @@ kubectl get nodes
 ```
 
 ```console
-NAME         STATUS                     ROLES                  AGE   VERSION
-kubemaster   Ready,SchedulingDisabled   control-plane,master   42m   v1.20.10
-kubenode01   Ready                      <none>                 42m   v1.19.0
+NAME         STATUS                     ROLES           AGE   VERSION
+kubemaster   Ready,SchedulingDisabled   control-plane   42m   v1.24.17
+kubenode01   Ready                      <none>          42m   v1.24.16
 ```
 
 Uncordon the master:
@@ -992,9 +1006,9 @@ kubectl get nodes
 ```
 
 ```console
-NAME         STATUS   ROLES                  AGE   VERSION
-kubemaster   Ready    control-plane,master   43m   v1.20.10
-kubenode01   Ready    <none>                 43m   v1.19.0
+NAME         STATUS   ROLES           AGE   VERSION
+kubemaster   Ready    control-plane   43m   v1.24.17
+kubenode01   Ready    <none>          43m   v1.24.16
 ```
 
 Drain the worker node:
@@ -1010,9 +1024,9 @@ kubectl get nodes
 ```
 
 ```console
-NAME         STATUS                     ROLES                  AGE   VERSION
-kubemaster   Ready                      control-plane,master   48m   v1.20.10
-kubenode01   Ready,SchedulingDisabled   <none>                 47m   v1.19.0
+NAME         STATUS                     ROLES           AGE   VERSION
+kubemaster   Ready                      control-plane   48m   v1.24.17
+kubenode01   Ready,SchedulingDisabled   <none>          47m   v1.24.16
 ```
 
 Upgrade k8s cluster components:
@@ -1020,20 +1034,23 @@ Upgrade k8s cluster components:
 ```bash
 # vagrant ssh kubenode01
 
-KUBE_VERSION=1.20.10
+KUBE_VERSION=1.24.17
 sudo apt-get install -y --allow-change-held-packages \
-  kubeadm="${KUBE_VERSION}-00"
+  kubeadm="${KUBE_VERSION}-1.1"
 
 sudo kubeadm upgrade node
 
 sudo apt-get install -y --allow-change-held-packages \
-  kubelet="${KUBE_VERSION}-00" \
-  kubectl="${KUBE_VERSION}-00"
+  kubelet="${KUBE_VERSION}-1.1" \
+  kubectl="${KUBE_VERSION}-1.1"
+sudo systemctl daemon-reload
+sudo systemctl restart kubelet
 ```
 
-Check the nodes:
+Uncordon the worker node (on `kubemaster`):
 
 ```bash
+# vagrant ssh kubemaster
 kubectl uncordon kubenode01
 ```
 
@@ -1041,14 +1058,16 @@ kubectl uncordon kubenode01
 node/kubenode01 uncordoned
 ```
 
+Check the nodes:
+
 ```bash
 kubectl get nodes
 ```
 
 ```console
-NAME         STATUS                     ROLES                  AGE   VERSION
-kubemaster   Ready                      control-plane,master   53m   v1.20.10
-kubenode01   Ready,SchedulingDisabled   <none>                 52m   v1.20.10
+NAME         STATUS   ROLES           AGE   VERSION
+kubemaster   Ready    control-plane   53m   v1.24.17
+kubenode01   Ready    <none>          52m   v1.24.17
 ```
 
 ## Kubernetes Secrets
@@ -1203,8 +1222,8 @@ usernameadmin2Opaque"
 Create `EncryptionConfiguration` for API server:
 
 ```bash
-mkdir /etc/kubernetes/etcd
-cat > /etc/kubernetes/etcd/encryptionconfiguration.yaml << EOF
+sudo mkdir /etc/kubernetes/etcd
+cat << EOF | sudo tee /etc/kubernetes/etcd/encryptionconfiguration.yaml > /dev/null
 apiVersion: apiserver.config.k8s.io/v1
 kind: EncryptionConfiguration
 resources:
@@ -1214,7 +1233,7 @@ resources:
     - aescbc:
         keys:
         - name: key1
-          secret: c2VjcmV0IGlzIHNlY3VyZQ==
+          secret: $(head -c 32 /dev/urandom | base64)
     - identity: {}
 EOF
 ```
@@ -1265,13 +1284,44 @@ ETCDCTL_API=3 etcdctl get /registry/secrets/default/secret3 \
 ...
 ```
 
+Secrets created before this change (`secret1` and `secret2`) are still stored
+in plain text. Rewrite all Secrets to encrypt them:
+
+```bash
+kubectl get secrets --all-namespaces -o json | kubectl replace -f -
+```
+
 ## Container Runtime
 
 * [Runtime Class](https://kubernetes.io/docs/concepts/containers/runtime-class/)
+* [gVisor with containerd](https://gvisor.dev/docs/user_guide/containerd/quick_start/)
+
+Install gVisor (`runsc`) and its containerd shim on `kubenode01`. Newer gVisor
+releases need Linux 5.6 or newer, so use a release from 2021 that runs on the
+Linux 4.15 kernel of Ubuntu 18.04:
+
+```bash
+# vagrant ssh kubenode01
+
+URL=https://storage.googleapis.com/gvisor/releases/release/20211011/x86_64
+wget "${URL}/runsc" "${URL}/runsc.sha512" \
+  "${URL}/containerd-shim-runsc-v1" "${URL}/containerd-shim-runsc-v1.sha512"
+sha512sum -c runsc.sha512 containerd-shim-runsc-v1.sha512
+chmod a+rx runsc containerd-shim-runsc-v1
+sudo mv runsc containerd-shim-runsc-v1 /usr/local/bin
+
+cat << EOF | sudo tee -a /etc/containerd/config.toml
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runsc]
+  runtime_type = "io.containerd.runsc.v1"
+EOF
+sudo systemctl restart containerd
+```
 
 Create `RuntimeClass` for gvisor:
 
 ```bash
+# vagrant ssh kubemaster
+
 kubectl label node kubenode01 runtimeclass=gvisor
 
 kubectl apply -f - << EOF
@@ -1299,8 +1349,8 @@ metadata:
 spec:
   runtimeClassName: gvisor
   containers:
-  - image: gvisor
-    name: nginx
+  - image: nginx
+    name: gvisor
 EOF
 ```
 
@@ -1362,6 +1412,7 @@ spec:
   securityContext:
     runAsUser: 1000
     runAsGroup: 3000
+    fsGroup: 2000
   containers:
   - command:
     - sh
@@ -1386,7 +1437,7 @@ uid=1000 gid=3000 groups=2000
 
 ### Privileged containers and PrivilegeEscalations
 
-* [Privileged](https://kubernetes.io/docs/concepts/policy/pod-security-policy/#privileged)
+* [Pod Security Standards](https://kubernetes.io/docs/concepts/security/pod-security-standards/)
 
 The container's root user is mapped to the host's root user.
 
@@ -1420,16 +1471,17 @@ $ kubectl exec -it busybox -- sh -c 'set -x ; sysctl kernel.hostname=attacker'
 kernel.hostname = attacker
 ```
 
-### Pod Security Policy
+### Pod Security Admission
 
-* [Pod Security Policies](https://kubernetes.io/docs/concepts/policy/pod-security-policy/)
+* [Pod Security Admission](https://kubernetes.io/docs/concepts/security/pod-security-admission/)
+* [Pod Security Standards](https://kubernetes.io/docs/concepts/security/pod-security-standards/)
 
-PodSecurityPolicy is deprecated
-([PodSecurityPolicy Deprecation: Past, Present, and Future](https://kubernetes.io/blog/2021/04/06/podsecuritypolicy-deprecation-past-present-and-future/))
-and you should use [Kyverno](https://github.com/kyverno/kyverno/) or [OPA/Gatekeeper](https://github.com/open-policy-agent/gatekeeper/)
-instead.
-
-* [Create a policy and a pod](https://kubernetes.io/docs/concepts/policy/pod-security-policy/#create-a-policy-and-a-pod)
+PodSecurityPolicy was removed in Kubernetes v1.25
+([PodSecurityPolicy Deprecation: Past, Present, and Future](https://kubernetes.io/blog/2021/04/06/podsecuritypolicy-deprecation-past-present-and-future/)).
+Use the built-in Pod Security Admission instead. For finer rules, like allowing
+only some `hostPath` directories, use
+[Kyverno](https://github.com/kyverno/kyverno/) or
+[OPA/Gatekeeper](https://github.com/open-policy-agent/gatekeeper/).
 
 Create a new namespace and a Pod that stores the current date in `/tmp/date` on
 the host node:
@@ -1472,103 +1524,29 @@ kubectl exec -it -n my-namespace \
     -o custom-columns=':metadata.name')" -- cat /tmp/date
 ```
 
-Enable the PodSecurityPolicy admission plugin in the API server:
+Enforce the `baseline` Pod Security Standard in the namespace. It forbids
+`hostPath` volumes:
 
 ```console
-sudo vi /etc/kubernetes/manifests/kube-apiserver.yaml
-...
-- --enable-admission-plugins=NodeRestriction,PodSecurityPolicy
-...
+$ kubectl label namespace my-namespace pod-security.kubernetes.io/enforce=baseline
+Warning: existing pods in namespace "my-namespace" violate the new PodSecurity enforce level "baseline:latest"
+Warning: my-busybox-7d5b7688f9-wh655: hostPath volumes
+namespace/my-namespace labeled
 ```
 
-Create a PodSecurityPolicy (PSP) that disallows `allowPrivilegeEscalation` and
-`privileged` mode, and only allows `HostPaths` for `/var/tmp`:
-
-```bash
-kubectl apply -f - << EOF
-apiVersion: policy/v1beta1
-kind: PodSecurityPolicy
-metadata:
-  name: default
-spec:
-  privileged: false
-  allowPrivilegeEscalation: false
-  allowedHostPaths:
-  - pathPrefix: /var/tmp
-  allowedCapabilities:
-  - NET_ADMIN
-  - IPC_LOCK
-  seLinux:
-    rule: RunAsAny
-  supplementalGroups:
-    rule: RunAsAny
-  runAsUser:
-    rule: RunAsAny
-  fsGroup:
-    rule: RunAsAny
-  volumes:
-  - '*'
-EOF
-```
-
-Create a `Role` and `RoleBinding` that grant permission to use PodSecurityPolicies:
-
-```bash
-kubectl create clusterrole psp-access --verb=use \
-  --resource=podsecuritypolicies
-kubectl create clusterrolebinding psp-access \
-  --clusterrole=psp-access \
-  --group=system:serviceaccounts:my-namespace --namespace=my-namespace
-```
-
-All Pods in the `my-namespace` namespace are now restricted to using
-`HostPaths` within `/var/tmp/`. If the existing Pod is restarted, you will
-observe the following:
+Running Pods are not affected, but new Pods are rejected. If the existing Pod is
+deleted, the Deployment can't recreate it:
 
 ```console
 $ kubectl delete pod -n my-namespace --all
 $ kubectl describe replicasets.apps -n my-namespace
 ...
 Events:
-  Type     Reason            Age                    From                   Message
-  ----     ------            ----                   ----                   -------
-  Normal   SuccessfulCreate  13m                    replicaset-controller  Created pod: my-busybox-7d5b7688f9-wh655
-  Warning  FailedCreate      4m5s (x17 over 4m46s)  replicaset-controller  Error creating: pods "my-busybox-7d5b7688f9-" is forbidden: PodSecurityPolicy: unable to admit pod: [spec.volumes[0].hostPath.pathPrefix: Invalid value: "/tmp": is not allowed to be used]
-```
-
-It is necessary to modify the Deployment to use `/var/tmp/` instead of `/tmp/`:
-
-```bash
-kubectl apply -f - << EOF
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  labels:
-    app: my-busybox
-  name: my-busybox
-  namespace: my-namespace
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: my-busybox
-  template:
-    metadata:
-      labels:
-        app: my-busybox
-    spec:
-      containers:
-      - command: ["sh", "-c", "while true ; do date | tee /tmp/date ; sleep 5 ; done" ]
-        image: busybox
-        name: busybox
-        volumeMounts:
-        - mountPath: /tmp
-          name: test-volume
-      volumes:
-      - name: test-volume
-        hostPath:
-          path: /tmp
-EOF
+  Type     Reason            Age   From                   Message
+  ----     ------            ----  ----                   -------
+  Normal   SuccessfulCreate  13m   replicaset-controller  Created pod: my-busybox-7d5b7688f9-wh655
+  Warning  FailedCreate      4s    replicaset-controller  Error creating: pods "my-busybox-7d5b7688f9-hv2wk" is forbidden: violates PodSecurity "baseline:latest": hostPath volumes (volume "test-volume")
+...
 ```
 
 ## Open Policy Agent (OPA)
@@ -1693,13 +1671,13 @@ kubectl delete K8sTrustedImages,ConstraintTemplates --all
 ## Image vulnerability scanning
 
 * [Trivy documentation](https://aquasecurity.github.io/trivy/)
-* [Installation](https://github.com/aquasecurity/trivy/blob/v0.20.0/docs/getting-started/installation.md):
+* [Installation](https://github.com/aquasecurity/trivy/blob/v0.76.2/docs/getting-started/installation.md):
 
 Install trivy:
 
 ```bash
 curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh |
-  sh -s -- -b /usr/local/bin v0.20.0
+  sudo sh -s -- -b /usr/local/bin v0.76.2
 ```
 
 Check vulnerabilities:
@@ -1752,8 +1730,8 @@ Total: 4 (CRITICAL: 4)
 List all images in the cluster:
 
 ```bash
-kubectl get pods -A --no-headers \
-  -o=custom-columns='DATA:spec.containers[*].image'
+kubectl get pods -A -o jsonpath='{.items[*].spec.containers[*].image}' |
+  tr ' ' '\n' | sort -u
 ```
 
 List all container images that have `CRITICAL` vulnerabilities:
@@ -1761,12 +1739,12 @@ List all container images that have `CRITICAL` vulnerabilities:
 ```bash
 while read -r CONTAINER_IMAGE; do
   trivy image --severity CRITICAL "${CONTAINER_IMAGE}"
-done < <(kubectl get pods -A --no-headers -o=custom-columns='DATA:spec.containers[*].image')
+done < <(kubectl get pods -A -o jsonpath='{.items[*].spec.containers[*].image}' | tr ' ' '\n' | sort -u)
 ```
 
 ## K8s Container and host security
 
-### Access to k8s objects form host
+### Access to k8s objects from host
 
 ```console
 $ strace -f ls /
@@ -1914,13 +1892,18 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/binHOSTNAME=secret
 
 * [Falco documentation](https://falco.org/docs/)
 
-Install Falco:
+Install Falco 0.30, the version these notes use (newer versions renamed the
+service and changed the default rules):
 
-```console
+```bash
 # vagrant ssh kubenode01
 
-curl -o install_falco -s https://falco.org/script/install
-sudo bash install_falco
+curl -fsSL https://falco.org/repo/falcosecurity-packages.asc |
+  sudo gpg --dearmor -o /usr/share/keyrings/falco-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/falco-archive-keyring.gpg] https://download.falco.org/packages/deb stable main" |
+  sudo tee /etc/apt/sources.list.d/falcosecurity.list
+sudo apt-get update
+sudo apt-get install -y "linux-headers-$(uname -r)" falco=0.30.0
 sudo systemctl daemon-reload
 sudo systemctl start falco
 sudo systemctl enable falco
@@ -1982,10 +1965,11 @@ spec:
 EOF
 ```
 
-Change the `Launch Package Management Process in Container` rule
-in `/etc/falco/falco_rules.yaml` to log only "container_name" and "image".
+Override the `Launch Package Management Process in Container` rule from
+`/etc/falco/falco_rules.yaml` in `/etc/falco/falco_rules.local.yaml` to log
+only "container_name" and "image".
 
-You can see the the available fields here:
+You can see the available fields here:
 [Supported Fields for Conditions and Outputs](https://falco.org/docs/rules/supported-fields/)
 or using command line:
 
@@ -2107,13 +2091,13 @@ $ sudo grep --no-filename test-audit-secret /etc/kubernetes/audit/logs/* | jq
 }
 ```
 
-Change the audit policy to log `RequestResponse` details only for ConfigMap
-resources, and Metadata for Secrets and ConfigMaps. NonResourceURLs like /api
-and /version will also be logged at RequestResponse level for authenticated
-users. All other events will be set to None:
+Change the audit policy to log Secrets and ConfigMaps at the `Metadata` level.
+NonResourceURLs like /api and /version will be logged at the `RequestResponse`
+level for authenticated users. All other events will be set to `None`.
+`kube-apiserver` reads the policy only when it starts, so restart it:
 
 ```bash
-$ sudo tee /etc/kubernetes/audit/audit-policy.yaml << EOF
+sudo tee /etc/kubernetes/audit/audit-policy.yaml << EOF
 apiVersion: audit.k8s.io/v1
 kind: Policy
 rules:
@@ -2128,6 +2112,11 @@ rules:
       resources: ["secrets", "configmaps"]
   - level: None
 EOF
+
+sudo mv /etc/kubernetes/manifests/kube-apiserver.yaml /etc/kubernetes/
+# Wait until kubelet stops the old kube-apiserver container
+while sudo crictl ps --name kube-apiserver --quiet | grep -q .; do sleep 1; done
+sudo mv /etc/kubernetes/kube-apiserver.yaml /etc/kubernetes/manifests/
 ```
 
 ## AppArmor
@@ -2141,39 +2130,6 @@ Check the AppArmor status on the node:
 # sudo su -
 
 $ aa-status
-apparmor module is loaded.
-17 profiles are loaded.
-17 profiles are in enforce mode.
-   /sbin/dhclient
-   /usr/bin/lxc-start
-   /usr/bin/man
-   /usr/lib/NetworkManager/nm-dhcp-client.action
-   /usr/lib/NetworkManager/nm-dhcp-helper
-   /usr/lib/connman/scripts/dhclient-script
-   /usr/lib/snapd/snap-confine
-   /usr/lib/snapd/snap-confine//mount-namespace-capture-helper
-   /usr/sbin/tcpdump
-   cri-containerd.apparmor.d
-   docker-default
-   lxc-container-default
-   lxc-container-default-cgns
-   lxc-container-default-with-mounting
-   lxc-container-default-with-nesting
-   man_filter
-   man_groff
-0 profiles are in complain mode.
-7 processes have profiles defined.
-7 processes are in enforce mode.
-   cri-containerd.apparmor.d (6900)
-   cri-containerd.apparmor.d (10512)
-   cri-containerd.apparmor.d (10570)
-   cri-containerd.apparmor.d (30135)
-   cri-containerd.apparmor.d (30192)
-   cri-containerd.apparmor.d (30271)
-   cri-containerd.apparmor.d (30362)
-0 processes are in complain mode.
-0 processes are unconfined but have a profile defined.
-root@kubemaster:/home/vagrant# aa-status
 apparmor module is loaded.
 17 profiles are loaded.
 17 profiles are in enforce mode.
