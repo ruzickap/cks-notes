@@ -1222,7 +1222,8 @@ usernameadmin2Opaque"
 Create `EncryptionConfiguration` for API server:
 
 ```bash
-sudo mkdir /etc/kubernetes/etcd
+# Only root may read the encryption key
+sudo mkdir -m 700 /etc/kubernetes/etcd
 cat << EOF | sudo tee /etc/kubernetes/etcd/encryptionconfiguration.yaml > /dev/null
 apiVersion: apiserver.config.k8s.io/v1
 kind: EncryptionConfiguration
